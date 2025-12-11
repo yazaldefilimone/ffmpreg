@@ -5,6 +5,7 @@ edition = "2024"
 description = "An experimental general-purpose multimedia toolkit."
 authors = ["Yazalde Filimone <yazaldefilimon@gmail.com>"]
 repository = "https://github.com/yazaldefilimone/ffmpreg"
+license = "Apache-2.0"
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
