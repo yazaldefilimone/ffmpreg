@@ -1,17 +1,17 @@
 use super::{AspectRatio, Colorspace, Interlacing, Y4mFormat};
 use crate::core::{Demuxer, Packet, Timebase};
-use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Result};
+use crate::io::{BufferedReader, IoError, IoResult, MediaRead, ReadPrimitives};
 
-pub struct Y4mReader<R: Read> {
-	reader: BufReader<R>,
+pub struct Y4mReader<R: MediaRead> {
+	reader: BufferedReader<R>,
 	format: Y4mFormat,
 	timebase: Timebase,
 	frame_count: u64,
 }
 
-impl<R: Read> Y4mReader<R> {
-	pub fn new(reader: R) -> Result<Self> {
-		let mut buf_reader = BufReader::new(reader);
+impl<R: MediaRead> Y4mReader<R> {
+	pub fn new(reader: R) -> IoResult<Self> {
+		let mut buf_reader = BufferedReader::new(reader);
 		let format = Self::read_header(&mut buf_reader)?;
 		let timebase = Timebase::new(format.framerate_den, format.framerate_num);
 
@@ -22,17 +22,26 @@ impl<R: Read> Y4mReader<R> {
 		self.format.clone()
 	}
 
-	fn read_header(reader: &mut BufReader<R>) -> Result<Y4mFormat> {
-		let mut header = String::new();
-		reader.read_line(&mut header)?;
+	fn read_header(reader: &mut BufferedReader<R>) -> IoResult<Y4mFormat> {
+		let mut header = Vec::new();
+		loop {
+			let byte = reader.read_u8()?;
+			if byte == b'\n' {
+				break;
+			}
+			header.push(byte);
+		}
 
-		if !header.starts_with("YUV4MPEG2") {
-			return Err(Error::new(ErrorKind::InvalidData, "not a Y4M file"));
+		let header_str = core::str::from_utf8(&header)
+			.map_err(|_| IoError::invalid_data("invalid UTF-8 in header"))?;
+
+		if !header_str.starts_with("YUV4MPEG2") {
+			return Err(IoError::invalid_data("not a Y4M file"));
 		}
 
 		let mut format = Y4mFormat::default();
 
-		for param in header.split_whitespace().skip(1) {
+		for param in header_str.split_whitespace().skip(1) {
 			if param.is_empty() {
 				continue;
 			}
@@ -64,24 +73,39 @@ impl<R: Read> Y4mReader<R> {
 		Ok(format)
 	}
 
-	fn read_frame_header(&mut self) -> Result<bool> {
-		let mut header = String::new();
-		let bytes_read = self.reader.read_line(&mut header)?;
-
-		if bytes_read == 0 {
-			return Ok(false);
+	fn read_frame_header(&mut self) -> IoResult<bool> {
+		let mut header = Vec::new();
+		loop {
+			match self.reader.read_u8() {
+				Ok(byte) => {
+					if byte == b'\n' {
+						break;
+					}
+					header.push(byte);
+				}
+				Err(e) if matches!(e.kind(), crate::io::IoErrorKind::UnexpectedEof) => {
+					if header.is_empty() {
+						return Ok(false);
+					}
+					return Err(e);
+				}
+				Err(e) => return Err(e),
+			}
 		}
 
-		if !header.starts_with("FRAME") {
-			return Err(Error::new(ErrorKind::InvalidData, "expected FRAME header"));
+		let header_str = core::str::from_utf8(&header)
+			.map_err(|_| IoError::invalid_data("invalid UTF-8 in frame header"))?;
+
+		if !header_str.starts_with("FRAME") {
+			return Err(IoError::invalid_data("expected FRAME header"));
 		}
 
 		Ok(true)
 	}
 }
 
-impl<R: Read> Demuxer for Y4mReader<R> {
-	fn read_packet(&mut self) -> Result<Option<Packet>> {
+impl<R: MediaRead> Demuxer for Y4mReader<R> {
+	fn read_packet(&mut self) -> IoResult<Option<Packet>> {
 		if !self.read_frame_header()? {
 			return Ok(None);
 		}
