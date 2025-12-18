@@ -53,11 +53,8 @@ const BITRATE_TABLE: [[[u32; 15]; 3]; 2] = [
 	],
 ];
 
-const SAMPLE_RATE_TABLE: [[u32; 3]; 3] = [
-	[44100, 48000, 32000],
-	[22050, 24000, 16000],
-	[11025, 12000, 8000],
-];
+const SAMPLE_RATE_TABLE: [[u32; 3]; 3] =
+	[[44100, 48000, 32000], [22050, 24000, 16000], [11025, 12000, 8000]];
 
 impl FrameHeader {
 	pub fn parse(data: &[u8]) -> Option<Self> {
@@ -133,9 +130,7 @@ impl FrameHeader {
 		let sample_rate = SAMPLE_RATE_TABLE[sr_version_idx][sample_rate_index];
 
 		let frame_size = match layer {
-			Layer::Layer1 => {
-				(12 * bitrate / sample_rate + if padding { 1 } else { 0 }) * 4
-			}
+			Layer::Layer1 => (12 * bitrate / sample_rate + if padding { 1 } else { 0 }) * 4,
 			Layer::Layer2 | Layer::Layer3 => {
 				let samples_per_frame = match (version, layer) {
 					(MpegVersion::Mpeg1, Layer::Layer3) => 1152,
