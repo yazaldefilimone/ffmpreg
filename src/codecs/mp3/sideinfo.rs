@@ -37,24 +37,13 @@ impl SideInfo {
 		let channels = header.channels as usize;
 		let is_mpeg1 = header.version == MpegVersion::Mpeg1;
 
-		let main_data_begin = if is_mpeg1 {
-			reader.read_bits(9)? as u16
-		} else {
-			reader.read_bits(8)? as u16
-		};
+		let main_data_begin =
+			if is_mpeg1 { reader.read_bits(9)? as u16 } else { reader.read_bits(8)? as u16 };
 
 		let private_bits = if is_mpeg1 {
-			if channels == 1 {
-				reader.read_bits(5)? as u8
-			} else {
-				reader.read_bits(3)? as u8
-			}
+			if channels == 1 { reader.read_bits(5)? as u8 } else { reader.read_bits(3)? as u8 }
 		} else {
-			if channels == 1 {
-				reader.read_bits(1)? as u8
-			} else {
-				reader.read_bits(2)? as u8
-			}
+			if channels == 1 { reader.read_bits(1)? as u8 } else { reader.read_bits(2)? as u8 }
 		};
 
 		let mut scfsi = [[false; 4]; 2];
@@ -77,11 +66,8 @@ impl SideInfo {
 				gc.big_values = reader.read_bits(9)? as u16;
 				gc.global_gain = reader.read_bits(8)? as u8;
 
-				gc.scalefac_compress = if is_mpeg1 {
-					reader.read_bits(4)? as u16
-				} else {
-					reader.read_bits(9)? as u16
-				};
+				gc.scalefac_compress =
+					if is_mpeg1 { reader.read_bits(4)? as u16 } else { reader.read_bits(9)? as u16 };
 
 				gc.window_switching = reader.read_bits(1)? == 1;
 
