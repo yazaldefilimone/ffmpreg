@@ -7,11 +7,13 @@ pub struct Packet {
 	pub dts: i64,
 	pub timebase: Timebase,
 	pub stream_index: usize,
+	pub keyframe: bool,
+	pub discard: bool,
 }
 
 impl Packet {
 	pub fn new(data: Vec<u8>, stream_index: usize, timebase: Timebase) -> Self {
-		Self { data, pts: 0, dts: 0, timebase, stream_index }
+		Self { data, pts: 0, dts: 0, timebase, stream_index, keyframe: false, discard: false }
 	}
 
 	pub fn with_pts(mut self, pts: i64) -> Self {

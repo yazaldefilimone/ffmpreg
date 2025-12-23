@@ -54,48 +54,56 @@ impl Resample {
 }
 
 impl Transform for Resample {
-	fn apply(&mut self, frame: Frame) -> IoResult<Frame> {
-		let src_rate = frame.sample_rate;
-		let channels = frame.channels as usize;
+	fn apply(&mut self, mut frame: Frame) -> IoResult<Frame> {
+		let frame_pts = frame.pts;
+		let stream_index = frame.stream_index;
+		let _timebase = frame.timebase.clone();
 
-		if src_rate == self.target_rate {
-			return Ok(frame);
-		}
+		if let Some(audio_frame) = frame.audio_mut() {
+			let src_rate = audio_frame.sample_rate;
+			let channels = audio_frame.channels as usize;
 
-		let input_samples: Vec<i16> =
-			frame.data.chunks(2).map(|c| i16::from_le_bytes([c[0], c[1]])).collect();
-
-		let _samples_per_channel = input_samples.len() / channels;
-		let mut channel_data: Vec<Vec<i16>> = Vec::with_capacity(channels);
-
-		for ch in 0..channels {
-			let channel_samples: Vec<i16> =
-				input_samples.iter().skip(ch).step_by(channels).copied().collect();
-			let resampled = Self::linear_interpolate(&channel_samples, src_rate, self.target_rate);
-			channel_data.push(resampled);
-		}
-
-		let output_samples_per_channel = channel_data.first().map(|c| c.len()).unwrap_or(0);
-		let mut output_data = Vec::with_capacity(output_samples_per_channel * channels * 2);
-
-		for i in 0..output_samples_per_channel {
-			for ch in 0..channels {
-				let sample = channel_data[ch].get(i).copied().unwrap_or(0);
-				output_data.extend_from_slice(&sample.to_le_bytes());
+			if src_rate == self.target_rate {
+				return Ok(frame);
 			}
+
+			let input_samples: Vec<i16> =
+				audio_frame.data.chunks(2).map(|c| i16::from_le_bytes([c[0], c[1]])).collect();
+
+			let _samples_per_channel = input_samples.len() / channels;
+			let mut channel_data: Vec<Vec<i16>> = Vec::with_capacity(channels);
+
+			for ch in 0..channels {
+				let channel_samples: Vec<i16> =
+					input_samples.iter().skip(ch).step_by(channels).copied().collect();
+				let resampled = Self::linear_interpolate(&channel_samples, src_rate, self.target_rate);
+				channel_data.push(resampled);
+			}
+
+			let output_samples_per_channel = channel_data.first().map(|c| c.len()).unwrap_or(0);
+			let mut output_data = Vec::with_capacity(output_samples_per_channel * channels * 2);
+
+			for i in 0..output_samples_per_channel {
+				for ch in 0..channels {
+					let sample = channel_data[ch].get(i).copied().unwrap_or(0);
+					output_data.extend_from_slice(&sample.to_le_bytes());
+				}
+			}
+
+			let new_timebase = Timebase::new(1, self.target_rate);
+			let new_pts = (frame_pts as f64 * self.target_rate as f64 / src_rate as f64) as i64;
+
+			let new_frame_audio = crate::core::FrameAudio {
+				data: output_data,
+				sample_rate: self.target_rate,
+				channels: audio_frame.channels,
+				nb_samples: output_samples_per_channel,
+			};
+
+			Ok(Frame::new_audio(new_frame_audio, new_timebase, stream_index).with_pts(new_pts))
+		} else {
+			Ok(frame)
 		}
-
-		let new_timebase = Timebase::new(1, self.target_rate);
-		let new_pts = (frame.pts as f64 * self.target_rate as f64 / src_rate as f64) as i64;
-
-		Ok(Frame {
-			data: output_data,
-			pts: new_pts,
-			timebase: new_timebase,
-			sample_rate: self.target_rate,
-			channels: frame.channels,
-			nb_samples: output_samples_per_channel,
-		})
 	}
 
 	fn name(&self) -> &'static str {

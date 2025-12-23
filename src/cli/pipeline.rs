@@ -10,7 +10,6 @@ use crate::io::{
 use crate::transform::{TransformChain, parse_transform};
 use std::fs::File;
 use std::path::Path;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MediaType {
 	Wav,
@@ -168,10 +167,21 @@ impl Pipeline {
 			match reader.read_packet()? {
 				Some(packet) => {
 					if let Some(frame) = decoder.decode(packet)? {
-						println!(
-							"  Frame {}: pts={}, samples={}, channels={}, rate={}",
-							frame_idx, frame.pts, frame.nb_samples, frame.channels, frame.sample_rate
-						);
+						if let Some(audio_frame) = frame.audio() {
+							println!(
+								"  Frame {}: pts={}, samples={}, channels={}, rate={}",
+								frame_idx,
+								frame.pts,
+								audio_frame.nb_samples,
+								audio_frame.channels,
+								audio_frame.sample_rate
+							);
+						} else if let Some(video_frame) = frame.video() {
+							println!(
+								"  Frame {}: pts={}, width={}, height={}",
+								frame_idx, frame.pts, video_frame.width, video_frame.height
+							);
+						}
 						frame_idx += 1;
 						if frame_idx >= 10 {
 							println!("  ... (showing first 10 frames)");
@@ -674,7 +684,7 @@ impl BatchPipeline {
 						}
 					}
 					Err(e) => {
-						eprintln!("Warning: failed to read entry: {}", e);
+						eprintln!("warning: failed to read entry: {}", e);
 					}
 				}
 			}

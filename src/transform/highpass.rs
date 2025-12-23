@@ -79,29 +79,31 @@ impl Highpass {
 
 impl Transform for Highpass {
 	fn apply(&mut self, mut frame: Frame) -> IoResult<Frame> {
-		if self.sample_rate != frame.sample_rate {
-			self.calculate_coeffs(frame.sample_rate);
-		}
+		if let Some(audio_frame) = frame.audio_mut() {
+			if self.sample_rate != audio_frame.sample_rate {
+				self.calculate_coeffs(audio_frame.sample_rate);
+			}
 
-		if self.states.len() != frame.channels as usize {
-			self.states = (0..frame.channels as usize).map(|_| BiquadState::default()).collect();
-		}
+			if self.states.len() != audio_frame.channels as usize {
+				self.states = (0..audio_frame.channels as usize).map(|_| BiquadState::default()).collect();
+			}
 
-		let channels = frame.channels as usize;
-		let samples_per_channel = frame.nb_samples;
+			let channels = audio_frame.channels as usize;
+			let samples_per_channel = audio_frame.nb_samples;
 
-		for i in 0..samples_per_channel {
-			for ch in 0..channels {
-				let offset = (i * channels + ch) * 2;
-				let sample = i16::from_le_bytes([frame.data[offset], frame.data[offset + 1]]);
-				let sample_f = sample as f32 / 32768.0;
+			for i in 0..samples_per_channel {
+				for ch in 0..channels {
+					let offset = (i * channels + ch) * 2;
+					let sample = i16::from_le_bytes([audio_frame.data[offset], audio_frame.data[offset + 1]]);
+					let sample_f = sample as f32 / 32768.0;
 
-				let processed = self.process_sample(sample_f, ch);
-				let output = (processed * 32767.0).clamp(-32768.0, 32767.0) as i16;
+					let processed = self.process_sample(sample_f, ch);
+					let output = (processed * 32767.0).clamp(-32768.0, 32767.0) as i16;
 
-				let bytes = output.to_le_bytes();
-				frame.data[offset] = bytes[0];
-				frame.data[offset + 1] = bytes[1];
+					let bytes = output.to_le_bytes();
+					audio_frame.data[offset] = bytes[0];
+					audio_frame.data[offset + 1] = bytes[1];
+				}
 			}
 		}
 

@@ -1,5 +1,5 @@
 use crate::container::WavFormat;
-use crate::core::{Decoder, Encoder, Frame, Packet, Timebase};
+use crate::core::{Decoder, Encoder, Frame, FrameAudio, Packet, Timebase};
 use crate::io::IoResult;
 
 const MS_ADAPT_TABLE: [i16; 16] =
@@ -144,14 +144,9 @@ impl Decoder for MsAdpcmDecoder {
 		}
 
 		let nb_samples = samples.len() / channels;
-		let frame = Frame::new(
-			output,
-			packet.timebase,
-			self.format.sample_rate,
-			self.format.channels,
-			nb_samples,
-		)
-		.with_pts(packet.pts);
+		let audio = FrameAudio::new(output, self.format.sample_rate, self.format.channels)
+			.with_nb_samples(nb_samples);
+		let frame = Frame::new_audio(audio, packet.timebase, packet.stream_index).with_pts(packet.pts);
 
 		Ok(Some(frame))
 	}
@@ -270,13 +265,18 @@ impl MsAdpcmEncoder {
 
 impl Encoder for MsAdpcmEncoder {
 	fn encode(&mut self, frame: Frame) -> IoResult<Option<Packet>> {
+		let data_bytes = match &frame.data {
+			crate::core::FrameData::Audio(audio) => &audio.data,
+			crate::core::FrameData::Video(video) => &video.data,
+		};
+
 		let samples: Vec<i16> =
-			frame.data.chunks_exact(2).map(|c| i16::from_le_bytes([c[0], c[1]])).collect();
+			data_bytes.chunks_exact(2).map(|c| i16::from_le_bytes([c[0], c[1]])).collect();
 
 		let channels = self.channels as usize;
 		let output = self.encode_block(&samples, channels);
 
-		let packet = Packet::new(output, 0, self.timebase).with_pts(frame.pts);
+		let packet = Packet::new(output, frame.stream_index, self.timebase).with_pts(frame.pts);
 		Ok(Some(packet))
 	}
 

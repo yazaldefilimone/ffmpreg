@@ -35,33 +35,34 @@ impl RmsLimiter {
 
 impl Transform for RmsLimiter {
 	fn apply(&mut self, mut frame: Frame) -> IoResult<Frame> {
-		let samples = frame.data.len() / 2;
-		let threshold_linear = Self::db_to_linear(self.threshold_db);
+		if let Some(audio_frame) = frame.audio_mut() {
+			let samples = audio_frame.data.len() / 2;
+			let threshold_linear = Self::db_to_linear(self.threshold_db);
 
-		for i in 0..samples {
-			let offset = i * 2;
-			let sample = i16::from_le_bytes([frame.data[offset], frame.data[offset + 1]]);
-			let sample_f = sample as f32 / 32768.0;
+			for i in 0..samples {
+				let offset = i * 2;
+				let sample = i16::from_le_bytes([audio_frame.data[offset], audio_frame.data[offset + 1]]);
+				let sample_f = sample as f32 / 32768.0;
 
-			self.rms_buffer[self.buffer_pos] = sample_f * sample_f;
-			self.buffer_pos = (self.buffer_pos + 1) % self.window_samples;
+				self.rms_buffer[self.buffer_pos] = sample_f * sample_f;
+				self.buffer_pos = (self.buffer_pos + 1) % self.window_samples;
 
-			let rms = self.calculate_rms();
-			let target_gain = if rms > threshold_linear { threshold_linear / rms } else { 1.0 };
+				let rms = self.calculate_rms();
+				let target_gain = if rms > threshold_linear { threshold_linear / rms } else { 1.0 };
 
-			if target_gain < self.current_gain {
-				self.current_gain = target_gain;
-			} else {
-				self.current_gain =
-					self.current_gain * self.release_coeff + target_gain * (1.0 - self.release_coeff);
+				if target_gain < self.current_gain {
+					self.current_gain = target_gain;
+				} else {
+					self.current_gain =
+						self.current_gain * self.release_coeff + target_gain * (1.0 - self.release_coeff);
+				}
+
+				let limited = (sample_f * self.current_gain * 32767.0).clamp(-32768.0, 32767.0) as i16;
+				let bytes = limited.to_le_bytes();
+				audio_frame.data[offset] = bytes[0];
+				audio_frame.data[offset + 1] = bytes[1];
 			}
-
-			let limited = (sample_f * self.current_gain * 32767.0).clamp(-32768.0, 32767.0) as i16;
-			let bytes = limited.to_le_bytes();
-			frame.data[offset] = bytes[0];
-			frame.data[offset + 1] = bytes[1];
 		}
-
 		Ok(frame)
 	}
 

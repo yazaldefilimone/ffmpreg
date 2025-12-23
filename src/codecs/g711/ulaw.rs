@@ -1,6 +1,6 @@
 use super::{ulaw_decode, ulaw_encode};
 use crate::container::WavFormat;
-use crate::core::{Decoder, Encoder, Frame, Packet, Timebase};
+use crate::core::{Decoder, Encoder, Frame, FrameAudio, Packet, Timebase};
 use crate::io::IoResult;
 
 pub struct UlawDecoder {
@@ -23,14 +23,9 @@ impl Decoder for UlawDecoder {
 		}
 
 		let nb_samples = output.len() / 2 / self.format.channels as usize;
-		let frame = Frame::new(
-			output,
-			packet.timebase,
-			self.format.sample_rate,
-			self.format.channels,
-			nb_samples,
-		)
-		.with_pts(packet.pts);
+		let audio = FrameAudio::new(output, self.format.sample_rate, self.format.channels)
+			.with_nb_samples(nb_samples);
+		let frame = Frame::new_audio(audio, packet.timebase, packet.stream_index).with_pts(packet.pts);
 
 		Ok(Some(frame))
 	}
@@ -52,8 +47,13 @@ impl UlawEncoder {
 
 impl Encoder for UlawEncoder {
 	fn encode(&mut self, frame: Frame) -> IoResult<Option<Packet>> {
+		let data_bytes = match &frame.data {
+			crate::core::FrameData::Audio(audio) => &audio.data,
+			crate::core::FrameData::Video(video) => &video.data,
+		};
+
 		let samples: Vec<i16> =
-			frame.data.chunks_exact(2).map(|c| i16::from_le_bytes([c[0], c[1]])).collect();
+			data_bytes.chunks_exact(2).map(|c| i16::from_le_bytes([c[0], c[1]])).collect();
 
 		let mut output = Vec::with_capacity(samples.len());
 
@@ -61,7 +61,7 @@ impl Encoder for UlawEncoder {
 			output.push(ulaw_encode(sample));
 		}
 
-		let packet = Packet::new(output, 0, self.timebase).with_pts(frame.pts);
+		let packet = Packet::new(output, frame.stream_index, self.timebase).with_pts(frame.pts);
 		Ok(Some(packet))
 	}
 

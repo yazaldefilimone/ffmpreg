@@ -26,45 +26,50 @@ impl Scale {
 	}
 
 	pub fn apply_yuv420(&self, frame: &Frame) -> IoResult<Frame> {
-		let src_y_size = (self.src_width * self.src_height) as usize;
-		let src_uv_size = src_y_size / 4;
+		if let Some(video_frame) = frame.video() {
+			let src_y_size = (self.src_width * self.src_height) as usize;
+			let src_uv_size = src_y_size / 4;
 
-		let dst_y_size = (self.target_width * self.target_height) as usize;
-		let dst_uv_size = dst_y_size / 4;
+			let dst_y_size = (self.target_width * self.target_height) as usize;
+			let dst_uv_size = dst_y_size / 4;
 
-		let src_y = &frame.data[0..src_y_size];
-		let src_u = &frame.data[src_y_size..src_y_size + src_uv_size];
-		let src_v = &frame.data[src_y_size + src_uv_size..src_y_size + 2 * src_uv_size];
+			let src_y = &video_frame.data[0..src_y_size];
+			let src_u = &video_frame.data[src_y_size..src_y_size + src_uv_size];
+			let src_v = &video_frame.data[src_y_size + src_uv_size..src_y_size + 2 * src_uv_size];
 
-		let mut dst_data = vec![0u8; dst_y_size + 2 * dst_uv_size];
-		let (dst_y, dst_uv) = dst_data.split_at_mut(dst_y_size);
-		let (dst_u, dst_v) = dst_uv.split_at_mut(dst_uv_size);
+			let mut dst_data = vec![0u8; dst_y_size + 2 * dst_uv_size];
+			let (dst_y, dst_uv) = dst_data.split_at_mut(dst_y_size);
+			let (dst_u, dst_v) = dst_uv.split_at_mut(dst_uv_size);
 
-		self.scale_plane(
-			src_y,
-			dst_y,
-			self.src_width,
-			self.src_height,
-			self.target_width,
-			self.target_height,
-		);
+			self.scale_plane(
+				src_y,
+				dst_y,
+				self.src_width,
+				self.src_height,
+				self.target_width,
+				self.target_height,
+			);
 
-		let src_uv_w = self.src_width / 2;
-		let src_uv_h = self.src_height / 2;
-		let dst_uv_w = self.target_width / 2;
-		let dst_uv_h = self.target_height / 2;
+			let src_uv_w = self.src_width / 2;
+			let src_uv_h = self.src_height / 2;
+			let dst_uv_w = self.target_width / 2;
+			let dst_uv_h = self.target_height / 2;
 
-		self.scale_plane(src_u, dst_u, src_uv_w, src_uv_h, dst_uv_w, dst_uv_h);
-		self.scale_plane(src_v, dst_v, src_uv_w, src_uv_h, dst_uv_w, dst_uv_h);
+			self.scale_plane(src_u, dst_u, src_uv_w, src_uv_h, dst_uv_w, dst_uv_h);
+			self.scale_plane(src_v, dst_v, src_uv_w, src_uv_h, dst_uv_w, dst_uv_h);
 
-		Ok(Frame {
-			data: dst_data,
-			pts: frame.pts,
-			timebase: frame.timebase,
-			sample_rate: frame.sample_rate,
-			channels: frame.channels,
-			nb_samples: dst_y_size + 2 * dst_uv_size,
-		})
+			let new_video = crate::core::FrameVideo::new(
+				dst_data,
+				video_frame.width,
+				video_frame.height,
+				video_frame.format,
+			);
+			Ok(
+				Frame::new_video(new_video, frame.timebase.clone(), frame.stream_index).with_pts(frame.pts),
+			)
+		} else {
+			Ok(frame.clone())
+		}
 	}
 
 	fn scale_plane(

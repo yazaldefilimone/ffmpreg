@@ -13,7 +13,11 @@ impl RawVideoEncoder {
 
 impl Encoder for RawVideoEncoder {
 	fn encode(&mut self, frame: Frame) -> IoResult<Option<Packet>> {
-		let packet = Packet::new(frame.data, 0, self.timebase).with_pts(frame.pts);
+		let data = match frame.data {
+			crate::core::FrameData::Audio(audio) => audio.data,
+			crate::core::FrameData::Video(video) => video.data,
+		};
+		let packet = Packet::new(data, frame.stream_index, self.timebase).with_pts(frame.pts);
 		Ok(Some(packet))
 	}
 

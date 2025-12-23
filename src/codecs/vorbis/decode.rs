@@ -1,5 +1,5 @@
 use crate::container::OggFormat;
-use crate::core::{Decoder, Frame, Packet};
+use crate::core::{Decoder, Frame, FrameAudio, Packet};
 use crate::io::{IoError, IoResult};
 use lewton::inside_ogg::OggStreamReader;
 use std::io::Cursor;
@@ -65,8 +65,8 @@ impl Decoder for VorbisDecoder {
 		}
 
 		let nb_samples = all_samples.len() / channels.max(1) as usize;
-		let frame =
-			Frame::new(output, packet.timebase, sample_rate, channels, nb_samples).with_pts(packet.pts);
+		let audio = FrameAudio::new(output, sample_rate, channels).with_nb_samples(nb_samples);
+		let frame = Frame::new_audio(audio, packet.timebase, packet.stream_index).with_pts(packet.pts);
 
 		Ok(Some(frame))
 	}

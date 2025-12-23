@@ -13,8 +13,16 @@ impl PcmEncoder {
 
 impl Encoder for PcmEncoder {
 	fn encode(&mut self, frame: Frame) -> IoResult<Option<Packet>> {
-		let packet = Packet::new(frame.data, 0, self.timebase).with_pts(frame.pts);
-		Ok(Some(packet))
+		match frame.data {
+			crate::core::FrameData::Audio(audio) => {
+				let packet = Packet::new(audio.data, frame.stream_index, self.timebase).with_pts(frame.pts);
+				Ok(Some(packet))
+			}
+			crate::core::FrameData::Video(video) => {
+				let packet = Packet::new(video.data, frame.stream_index, self.timebase).with_pts(frame.pts);
+				Ok(Some(packet))
+			}
+		}
 	}
 
 	fn flush(&mut self) -> IoResult<Option<Packet>> {

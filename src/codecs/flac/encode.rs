@@ -70,7 +70,12 @@ impl FlacEncoder {
 
 impl Encoder for FlacEncoder {
 	fn encode(&mut self, frame: Frame) -> IoResult<Option<Packet>> {
-		let samples = self.bytes_to_samples(&frame.data);
+		let data_bytes = match &frame.data {
+			crate::core::FrameData::Audio(audio) => &audio.data,
+			crate::core::FrameData::Video(video) => &video.data,
+		};
+
+		let samples = self.bytes_to_samples(data_bytes);
 
 		if samples.is_empty() || samples[0].is_empty() {
 			return Ok(None);
@@ -79,7 +84,7 @@ impl Encoder for FlacEncoder {
 		let encoded = encode_frame(&samples, self.frame_count, &self.stream_info);
 		self.frame_count += 1;
 
-		let packet = Packet::new(encoded, 0, self.timebase).with_pts(frame.pts);
+		let packet = Packet::new(encoded, frame.stream_index, self.timebase).with_pts(frame.pts);
 		Ok(Some(packet))
 	}
 

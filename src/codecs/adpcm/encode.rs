@@ -17,8 +17,13 @@ impl AdpcmEncoder {
 
 impl Encoder for AdpcmEncoder {
 	fn encode(&mut self, frame: Frame) -> IoResult<Option<Packet>> {
+		let data_bytes = match &frame.data {
+			crate::core::FrameData::Audio(audio) => &audio.data,
+			crate::core::FrameData::Video(video) => &video.data,
+		};
+
 		let samples: Vec<i16> =
-			frame.data.chunks(2).map(|c| i16::from_le_bytes([c[0], c[1]])).collect();
+			data_bytes.chunks(2).map(|c| i16::from_le_bytes([c[0], c[1]])).collect();
 
 		let mut output = Vec::with_capacity(samples.len() / 2);
 
@@ -36,7 +41,7 @@ impl Encoder for AdpcmEncoder {
 			output.push(nibble1 | (nibble2 << 4));
 		}
 
-		let packet = Packet::new(output, 0, self.timebase).with_pts(frame.pts);
+		let packet = Packet::new(output, frame.stream_index, self.timebase).with_pts(frame.pts);
 		Ok(Some(packet))
 	}
 

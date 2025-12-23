@@ -1,7 +1,7 @@
 use super::FlacStreamInfo;
 use super::frame::decode_frame;
 use crate::container::FlacFormat;
-use crate::core::{Decoder, Frame, Packet};
+use crate::core::{Decoder, Frame, FrameAudio, Packet};
 use crate::io::IoResult;
 
 pub struct FlacDecoder {
@@ -71,14 +71,10 @@ impl Decoder for FlacDecoder {
 		let output = self.samples_to_bytes(&flac_frame.samples);
 		let nb_samples = flac_frame.block_size;
 
-		let frame = Frame::new(
-			output,
-			packet.timebase,
-			self.stream_info.sample_rate,
-			self.stream_info.channels,
-			nb_samples,
-		)
-		.with_pts(packet.pts);
+		let audio = FrameAudio::new(output, self.stream_info.sample_rate, self.stream_info.channels)
+			.with_nb_samples(nb_samples);
+
+		let frame = Frame::new_audio(audio, packet.timebase, packet.stream_index).with_pts(packet.pts);
 
 		Ok(Some(frame))
 	}

@@ -1,5 +1,5 @@
 use crate::container::Y4mFormat;
-use crate::core::{Decoder, Frame, Packet};
+use crate::core::{Decoder, Frame, FrameVideo, Packet, VideoFormat};
 use crate::io::IoResult;
 
 pub struct RawVideoDecoder {
@@ -14,8 +14,9 @@ impl RawVideoDecoder {
 
 impl Decoder for RawVideoDecoder {
 	fn decode(&mut self, packet: Packet) -> IoResult<Option<Frame>> {
-		let frame = Frame::new(packet.data, packet.timebase, self.format.framerate_num, 1, 1)
-			.with_pts(packet.pts);
+		let video =
+			FrameVideo::new(packet.data, self.format.width, self.format.height, VideoFormat::YUV420);
+		let frame = Frame::new_video(video, packet.timebase, packet.stream_index).with_pts(packet.pts);
 		Ok(Some(frame))
 	}
 

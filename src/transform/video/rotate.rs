@@ -39,36 +39,41 @@ impl Rotate {
 	}
 
 	pub fn apply_yuv420(&self, frame: &Frame) -> IoResult<Frame> {
-		let y_size = (self.width * self.height) as usize;
-		let uv_size = y_size / 4;
+		if let Some(video_frame) = frame.video() {
+			let y_size = (self.width * self.height) as usize;
+			let uv_size = y_size / 4;
 
-		let src_y = &frame.data[0..y_size];
-		let src_u = &frame.data[y_size..y_size + uv_size];
-		let src_v = &frame.data[y_size + uv_size..y_size + 2 * uv_size];
+			let src_y = &video_frame.data[0..y_size];
+			let src_u = &video_frame.data[y_size..y_size + uv_size];
+			let src_v = &video_frame.data[y_size + uv_size..y_size + 2 * uv_size];
 
-		let (dst_w, dst_h) = self.output_dimensions();
-		let dst_y_size = (dst_w * dst_h) as usize;
-		let dst_uv_size = dst_y_size / 4;
+			let (dst_w, dst_h) = self.output_dimensions();
+			let dst_y_size = (dst_w * dst_h) as usize;
+			let dst_uv_size = dst_y_size / 4;
 
-		let mut dst_data = vec![0u8; dst_y_size + 2 * dst_uv_size];
-		let (dst_y, dst_uv) = dst_data.split_at_mut(dst_y_size);
-		let (dst_u, dst_v) = dst_uv.split_at_mut(dst_uv_size);
+			let mut dst_data = vec![0u8; dst_y_size + 2 * dst_uv_size];
+			let (dst_y, dst_uv) = dst_data.split_at_mut(dst_y_size);
+			let (dst_u, dst_v) = dst_uv.split_at_mut(dst_uv_size);
 
-		self.rotate_plane(src_y, dst_y, self.width, self.height);
+			self.rotate_plane(src_y, dst_y, self.width, self.height);
 
-		let src_uv_w = self.width / 2;
-		let src_uv_h = self.height / 2;
-		self.rotate_plane(src_u, dst_u, src_uv_w, src_uv_h);
-		self.rotate_plane(src_v, dst_v, src_uv_w, src_uv_h);
+			let src_uv_w = self.width / 2;
+			let src_uv_h = self.height / 2;
+			self.rotate_plane(src_u, dst_u, src_uv_w, src_uv_h);
+			self.rotate_plane(src_v, dst_v, src_uv_w, src_uv_h);
 
-		Ok(Frame {
-			data: dst_data,
-			pts: frame.pts,
-			timebase: frame.timebase,
-			sample_rate: frame.sample_rate,
-			channels: frame.channels,
-			nb_samples: dst_y_size + 2 * dst_uv_size,
-		})
+			let new_video = crate::core::FrameVideo::new(
+				dst_data,
+				video_frame.width,
+				video_frame.height,
+				video_frame.format,
+			);
+			Ok(
+				Frame::new_video(new_video, frame.timebase.clone(), frame.stream_index).with_pts(frame.pts),
+			)
+		} else {
+			Ok(frame.clone())
+		}
 	}
 
 	fn rotate_plane(&self, src: &[u8], dst: &mut [u8], src_w: u32, src_h: u32) {

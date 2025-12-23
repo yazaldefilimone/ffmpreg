@@ -1,6 +1,6 @@
 use super::header::FrameHeader;
 use super::layer3::Layer3Decoder;
-use crate::core::{Decoder, Frame, Packet};
+use crate::core::{Decoder, Frame, FrameAudio, Packet};
 use crate::io::IoResult;
 
 pub struct Mp3Decoder {
@@ -90,9 +90,9 @@ impl Decoder for Mp3Decoder {
 		}
 
 		let nb_samples = all_samples.len() / detected_channels.max(1) as usize;
-		let frame =
-			Frame::new(output, packet.timebase, detected_sample_rate, detected_channels, nb_samples)
-				.with_pts(packet.pts);
+		let audio =
+			FrameAudio::new(output, detected_sample_rate, detected_channels).with_nb_samples(nb_samples);
+		let frame = Frame::new_audio(audio, packet.timebase, packet.stream_index).with_pts(packet.pts);
 
 		Ok(Some(frame))
 	}
