@@ -31,7 +31,7 @@ fn main() {
 		Ok(()) => {
 			if !args.show {
 				if let Some(output) = &args.output {
-					println!("Success: {} -> {}", args.input, output);
+					println!("ok: {} -> {}", args.input, output);
 				}
 			}
 		}
