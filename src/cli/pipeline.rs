@@ -1,7 +1,7 @@
 use crate::codecs::{PcmDecoder, PcmEncoder, RawVideoDecoder, RawVideoEncoder};
 use crate::container::{
-	AviReader, AviWriter, FlacFormat, FlacReader, FlacWriter, Mp3Reader, Mp3Writer, Mp4Reader,
-	Mp4Writer, OggReader, OggWriter, WavReader, WavWriter, Y4mReader, Y4mWriter,
+	AviReader, AviWriter, FlacFormat, FlacReader, FlacWriter, Mp4Reader, Mp4Writer, WavReader,
+	WavWriter, Y4mReader, Y4mWriter,
 };
 use crate::core::{Decoder, Demuxer, Encoder, Muxer, Timebase, Transform};
 use crate::io::{
@@ -15,8 +15,6 @@ pub enum MediaType {
 	Wav,
 	Y4m,
 	Flac,
-	Mp3,
-	Ogg,
 	Avi,
 	Mp4,
 	Unknown,
@@ -29,8 +27,6 @@ impl MediaType {
 			"wav" => MediaType::Wav,
 			"y4m" => MediaType::Y4m,
 			"flac" => MediaType::Flac,
-			"mp3" => MediaType::Mp3,
-			"ogg" | "oga" => MediaType::Ogg,
 			"avi" => MediaType::Avi,
 			"mp4" | "m4a" | "m4v" => MediaType::Mp4,
 			_ => MediaType::Unknown,
@@ -38,7 +34,7 @@ impl MediaType {
 	}
 
 	pub fn is_audio(&self) -> bool {
-		matches!(self, MediaType::Wav | MediaType::Flac | MediaType::Mp3 | MediaType::Ogg)
+		matches!(self, MediaType::Wav | MediaType::Flac)
 	}
 
 	pub fn is_video(&self) -> bool {
@@ -123,9 +119,6 @@ impl Pipeline {
 			(MediaType::Wav, MediaType::Flac) => self.run_wav_to_flac(),
 			(MediaType::Flac, MediaType::Wav) => self.run_flac_to_wav(),
 			(MediaType::Flac, MediaType::Flac) => self.run_flac_to_flac(),
-			(MediaType::Mp3, MediaType::Mp3) => self.run_mp3_passthrough(),
-			(MediaType::Mp3, MediaType::Wav) => self.run_mp3_to_wav(),
-			(MediaType::Ogg, MediaType::Ogg) => self.run_ogg_passthrough(),
 			(MediaType::Y4m, MediaType::Y4m) => self.run_y4m_transcode(),
 			(MediaType::Avi, MediaType::Avi) => self.run_avi_passthrough(),
 			(MediaType::Mp4, MediaType::Mp4) => self.run_mp4_passthrough(),
@@ -139,8 +132,6 @@ impl Pipeline {
 		match media_type {
 			MediaType::Wav => self.run_wav_show(),
 			MediaType::Flac => self.run_flac_show(),
-			MediaType::Mp3 => self.run_mp3_show(),
-			MediaType::Ogg => self.run_ogg_show(),
 			MediaType::Y4m => self.run_y4m_show(),
 			MediaType::Avi => self.run_avi_show(),
 			MediaType::Mp4 => self.run_mp4_show(),
@@ -208,35 +199,6 @@ impl Pipeline {
 		println!("  Total Samples: {}", format.total_samples);
 		println!("  Min Block Size: {}", format.min_block_size);
 		println!("  Max Block Size: {}", format.max_block_size);
-
-		Ok(())
-	}
-
-	fn run_mp3_show(&self) -> IoResult<()> {
-		let input = FileAdapter::open(&self.input_path)?;
-		let reader = Mp3Reader::new(input)?;
-		let format = reader.format();
-
-		println!("Format: MP3");
-		println!("  Version: {:?}", format.version);
-		println!("  Layer: {:?}", format.layer);
-		println!("  Channels: {}", format.channels);
-		println!("  Sample Rate: {} Hz", format.sample_rate);
-		println!("  Bitrate: {} kbps", format.bitrate);
-		println!("  Channel Mode: {:?}", format.channel_mode);
-
-		Ok(())
-	}
-
-	fn run_ogg_show(&self) -> IoResult<()> {
-		let input = FileAdapter::open(&self.input_path)?;
-		let reader = OggReader::new(input)?;
-		let format = reader.format();
-
-		println!("Format: OGG");
-		println!("  Channels: {}", format.channels);
-		println!("  Sample Rate: {} Hz", format.sample_rate);
-		println!("  Bitstream Serial: {}", format.bitstream_serial);
 
 		Ok(())
 	}
@@ -430,80 +392,6 @@ impl Pipeline {
 
 		let output = FileAdapter::create(&output_path)?;
 		let mut writer = FlacWriter::new(output, format)?;
-
-		loop {
-			match reader.read_packet()? {
-				Some(packet) => {
-					writer.write_packet(packet)?;
-				}
-				None => break,
-			}
-		}
-
-		writer.finalize()?;
-		Ok(())
-	}
-
-	fn run_mp3_passthrough(&self) -> IoResult<()> {
-		let output_path = self.require_output()?;
-
-		let input = FileAdapter::open(&self.input_path)?;
-		let mut reader = Mp3Reader::new(input)?;
-
-		let output = FileAdapter::create(&output_path)?;
-		let mut writer = Mp3Writer::new(output)?;
-
-		loop {
-			match reader.read_packet()? {
-				Some(packet) => {
-					writer.write_packet(packet)?;
-				}
-				None => break,
-			}
-		}
-
-		writer.finalize()?;
-		Ok(())
-	}
-
-	fn run_mp3_to_wav(&self) -> IoResult<()> {
-		let output_path = self.require_output()?;
-
-		let input = FileAdapter::open(&self.input_path)?;
-		let mut reader = Mp3Reader::new(input)?;
-		let mp3_format = reader.format();
-
-		let wav_format = crate::container::WavFormat {
-			sample_rate: mp3_format.sample_rate,
-			channels: mp3_format.channels,
-			bit_depth: 16,
-		};
-
-		let output = FileAdapter::create(&output_path)?;
-		let mut writer = WavWriter::new(output, wav_format)?;
-
-		loop {
-			match reader.read_packet()? {
-				Some(packet) => {
-					writer.write_packet(packet)?;
-				}
-				None => break,
-			}
-		}
-
-		writer.finalize()?;
-		Ok(())
-	}
-
-	fn run_ogg_passthrough(&self) -> IoResult<()> {
-		let output_path = self.require_output()?;
-
-		let input = FileAdapter::open(&self.input_path)?;
-		let mut reader = OggReader::new(input)?;
-		let format = reader.format();
-
-		let output = FileAdapter::create(&output_path)?;
-		let mut writer = OggWriter::new(output, format.bitstream_serial)?;
 
 		loop {
 			match reader.read_packet()? {

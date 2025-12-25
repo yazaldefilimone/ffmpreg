@@ -39,8 +39,6 @@ impl Show {
 			MediaType::Wav => analyze::analyze_wav(input, &self.input_path, &self.opts),
 			MediaType::Y4m => analyze::analyze_y4m(input, &self.input_path, &self.opts),
 			MediaType::Flac => analyze::analyze_flac(input, &self.input_path, &self.opts),
-			MediaType::Mp3 => analyze::analyze_mp3(input, &self.input_path, &self.opts),
-			MediaType::Ogg => analyze::analyze_ogg(input, &self.input_path, &self.opts),
 			MediaType::Avi => analyze::analyze_avi(input, &self.input_path, &self.opts),
 			MediaType::Mp4 => analyze::analyze_mp4(input, &self.input_path, &self.opts),
 			MediaType::Unknown => Err(crate::io::IoError::invalid_data("unsupported file format")),

@@ -1,7 +1,6 @@
 use crate::codecs::{PcmDecoder, RawVideoDecoder};
 use crate::container::{
-	AviReader, FlacReader, Mp3Reader, Mp4Reader, OggReader, WavFormat, WavReader, Y4mFormat,
-	Y4mReader,
+	AviReader, FlacReader, Mp4Reader, WavFormat, WavReader, Y4mFormat, Y4mReader,
 };
 use crate::core::{Decoder, Demuxer};
 use crate::io::{IoResult, MediaSeek, SeekFrom};
@@ -263,50 +262,6 @@ where
 	});
 
 	let file_info = FileInfo { path: path.to_string(), duration, size: file_size };
-	Ok(MediaInfo { file: file_info, streams: vec![stream], frames: Vec::new() })
-}
-
-pub fn analyze_mp3<R>(reader: R, path: &str, _opts: &ShowOptions) -> IoResult<MediaInfo>
-where
-	R: crate::io::MediaRead + MediaSeek,
-{
-	let file_size = measure_file_size(reader)?;
-	let input = open_file(path)?;
-	let mp3_reader = Mp3Reader::new(input)?;
-	let format = mp3_reader.format();
-
-	let duration = (file_size as f64 * 8.0) / (format.bitrate as f64 * 1000.0);
-
-	let stream = StreamInfo::Audio(AudioStreamInfo {
-		index: 0,
-		codec: format!("mp3 ({:?})", format.layer),
-		sample_rate: format.sample_rate,
-		channels: format.channels,
-		bit_depth: 16,
-	});
-
-	let file_info = FileInfo { path: path.to_string(), duration, size: file_size };
-	Ok(MediaInfo { file: file_info, streams: vec![stream], frames: Vec::new() })
-}
-
-pub fn analyze_ogg<R>(reader: R, path: &str, _opts: &ShowOptions) -> IoResult<MediaInfo>
-where
-	R: crate::io::MediaRead + MediaSeek,
-{
-	let file_size = measure_file_size(reader)?;
-	let input = open_file(path)?;
-	let ogg_reader = OggReader::new(input)?;
-	let format = ogg_reader.format();
-
-	let stream = StreamInfo::Audio(AudioStreamInfo {
-		index: 0,
-		codec: "vorbis".to_string(),
-		sample_rate: format.sample_rate,
-		channels: format.channels,
-		bit_depth: 16,
-	});
-
-	let file_info = FileInfo { path: path.to_string(), duration: 0.0, size: file_size };
 	Ok(MediaInfo { file: file_info, streams: vec![stream], frames: Vec::new() })
 }
 

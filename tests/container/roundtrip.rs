@@ -1,5 +1,5 @@
 use ffmpreg::codecs::{FlacEncoder, PcmDecoder, PcmEncoder};
-use ffmpreg::container::{FlacFormat, FlacWriter, Mp3Writer, OggWriter, WavReader, WavWriter};
+use ffmpreg::container::{FlacFormat, FlacWriter, WavReader, WavWriter};
 use ffmpreg::core::{Decoder, Demuxer, Encoder, Muxer, Timebase};
 use ffmpreg::io::Cursor;
 
@@ -255,64 +255,6 @@ fn test_flac_roundtrip_full_pipeline() {
 
 	flac_writer.finalize().unwrap();
 	assert!(frames_written > 0, "no FLAC frames written");
-}
-
-#[test]
-fn test_mp3_roundtrip_read_write_identity() {
-	let wav_source = create_mono_wav(512);
-	let wav_cursor = Cursor::new(wav_source);
-	let mut wav_reader = WavReader::new(wav_cursor).unwrap();
-	let wav_format = wav_reader.format();
-
-	let mut pcm_decoder = PcmDecoder::new(wav_format);
-	let mut frame_data_samples = Vec::new();
-
-	while let Some(packet) = wav_reader.read_packet().unwrap() {
-		if let Some(frame) = pcm_decoder.decode(packet).unwrap() {
-			if let Some(audio) = frame.audio() {
-				frame_data_samples.push(audio.data.clone());
-			}
-		}
-	}
-
-	assert!(!frame_data_samples.is_empty(), "no audio frames decoded from WAV");
-
-	let output_buffer = Cursor::new(Vec::new());
-	let mut mp3_writer = Mp3Writer::new(output_buffer).unwrap();
-
-	let mut packets_written = 0;
-	let frame_count = frame_data_samples.len();
-	for frame_data in frame_data_samples {
-		let dummy_packet =
-			ffmpreg::core::Packet::new(frame_data, 0, Timebase::new(1, wav_format.sample_rate));
-		mp3_writer.write_packet(dummy_packet).unwrap();
-		packets_written += 1;
-	}
-
-	mp3_writer.finalize().unwrap();
-
-	assert!(packets_written > 0, "no packets written to MP3, processed {} audio frames", frame_count);
-}
-
-#[test]
-fn test_ogg_roundtrip_vorbis_format() {
-	let wav_source = create_mono_wav(512);
-	let wav_cursor = Cursor::new(wav_source);
-	let mut wav_reader = WavReader::new(wav_cursor).unwrap();
-	let _wav_format = wav_reader.format();
-
-	let output_buffer = Cursor::new(Vec::new());
-	let mut ogg_writer = OggWriter::new(output_buffer, 42).unwrap();
-
-	let mut packet_count = 0;
-	while let Some(packet) = wav_reader.read_packet().unwrap() {
-		packet_count += 1;
-		ogg_writer.write_packet(packet).unwrap();
-	}
-
-	ogg_writer.finalize().unwrap();
-
-	assert!(packet_count > 0, "no packets written to OGG");
 }
 
 #[test]
