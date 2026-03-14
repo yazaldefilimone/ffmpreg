@@ -9,6 +9,7 @@ use crate::message::Result;
 pub struct Track {
 	pub id: usize,
 	pub codec_in: CodecId,
+	pub codec_out: CodecId,
 	pub timestamp: Timestamp,
 	pub format: TrackFormat,
 }
@@ -17,6 +18,10 @@ impl Track {
 	pub fn decoder(&self, resolver: &CodecResolver) -> Result<Box<dyn Decoder>> {
 		let decoder = resolver.decoder_for(self)?;
 		Ok(decoder)
+	}
+
+	pub fn codec_out(&mut self, codec_id: CodecId) {
+		self.codec_out = codec_id;
 	}
 
 	pub fn is_audio(&self) -> bool {
