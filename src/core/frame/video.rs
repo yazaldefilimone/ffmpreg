@@ -23,7 +23,7 @@ pub struct PixelFormat {
 }
 
 #[derive(Debug, Clone)]
-pub struct FrameVideo {
+pub struct VideoFrame {
 	y: Vec<u8>,
 	u: Vec<u8>,
 	v: Vec<u8>,
@@ -86,7 +86,7 @@ impl PixelFormat {
 	}
 }
 
-impl FrameVideo {
+impl VideoFrame {
 	pub fn new(
 		y: Vec<u8>,
 		u: Vec<u8>,
