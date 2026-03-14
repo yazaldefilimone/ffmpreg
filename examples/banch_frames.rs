@@ -1,20 +1,8 @@
-#![allow(dead_code, unused_imports, unused_variables)]
-
 use osaka::Result;
 use osaka::core::resolver::CodecResolver;
 use osaka::io::Input;
 use osaka::message::Report;
 use std::time::Instant;
-
-fn format_human(n: f64) -> String {
-	if n >= 1_000_000.0 {
-		format!("{:.2}M", n / 1_000_000.0)
-	} else if n >= 1_000.0 {
-		format!("{:.2}k", n / 1_000.0)
-	} else {
-		format!("{:.0}", n)
-	}
-}
 
 fn main() -> Result<()> {
 	let start = Instant::now();
@@ -35,7 +23,5 @@ fn main() -> Result<()> {
 
 	let duration = start.elapsed().as_secs_f64();
 	let fps = frames as f64 / duration;
-
-	println!("{} frames/s.", format_human(fps));
 	Ok(())
 }
