@@ -30,7 +30,7 @@ impl<R: MediaRead> WavDemuxer<R> {
 		let time = Time::new(1, header.sample_rate)?;
 		let block_align = format.block_align() as u64;
 		let max_chunk = (CHUNK_SIZE_LIMIT as u64 / block_align) * block_align;
-		let codec = format.to_codec_id();
+		let codec_in = format.to_codec_id();
 
 		let audio_format = AudioFormat {
 			channels: format.channels,
@@ -40,7 +40,8 @@ impl<R: MediaRead> WavDemuxer<R> {
 
 		let track = Track {
 			id: 0,
-			codec_in: codec,
+			codec_in,
+			codec_out: codec_in,
 			timestamp: Timestamp::zero(time),
 			format: TrackFormat::Audio(audio_format),
 		};
