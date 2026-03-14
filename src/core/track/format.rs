@@ -57,6 +57,21 @@ pub enum TrackFormat {
 	Video(VideoFormat),
 }
 
+impl TrackFormat {
+	pub fn audio(&self) -> Option<&AudioFormat> {
+		match self {
+			Self::Audio(audio) => Some(audio),
+			_ => None,
+		}
+	}
+	pub fn video(&self) -> Option<&VideoFormat> {
+		match self {
+			Self::Video(video) => Some(video),
+			_ => None,
+		}
+	}
+}
+
 #[derive(Debug, Clone)]
 pub enum Format {
 	Wav(WavFormat),
