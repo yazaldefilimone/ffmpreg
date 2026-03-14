@@ -1,4 +1,3 @@
-use crate::cli::stream::StreamOption;
 use std::path::PathBuf;
 
 #[derive(Debug)]
