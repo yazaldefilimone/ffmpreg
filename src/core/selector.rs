@@ -1,4 +1,4 @@
-use crate::{error, message, utils::kv::Kv};
+use crate::{error, message, utils::kv::KeyValue};
 use std::fmt::Display;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -20,7 +20,7 @@ impl Selector {
 		matches!(self, Selector::All)
 	}
 
-	pub fn from_kv(kv: &Kv) -> message::Result<Option<Self>> {
+	pub fn from_kv(kv: &KeyValue) -> message::Result<Option<Self>> {
 		let selector = match kv.get("track").or(kv.get("t")) {
 			None => return Ok(None),
 			Some(track) => match track.as_str() {
