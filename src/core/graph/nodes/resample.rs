@@ -13,7 +13,7 @@ impl ResamplerNode {
 }
 
 impl Node for ResamplerNode {
-	fn process(&mut self, input: Media) -> Result<Vec<Media>> {
+	fn run(&mut self, input: Media) -> Result<Vec<Media>> {
 		let frame = input.into_frame()?;
 		let output = self.resampler.resample(frame)?;
 		Ok(vec![Media::Frame(output)])
