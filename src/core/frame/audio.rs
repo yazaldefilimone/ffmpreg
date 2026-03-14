@@ -32,7 +32,7 @@ pub enum SampleRate {
 }
 
 #[derive(Debug, Clone)]
-pub struct FrameAudio {
+pub struct AudioFrame {
 	pub data: Vec<u8>,
 	pub sample_rate: SampleRate,
 	pub channels: Channels,
@@ -118,7 +118,7 @@ impl SampleRate {
 	}
 }
 
-impl FrameAudio {
+impl AudioFrame {
 	pub fn new(
 		data: Vec<u8>,
 		sample_rate: SampleRate,
