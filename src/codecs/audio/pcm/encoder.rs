@@ -24,7 +24,7 @@ impl PcmEncoder {
 }
 
 impl Encoder for PcmEncoder {
-	fn input_format(&self) -> TrackFormat {
+	fn format(&self) -> TrackFormat {
 		TrackFormat::Audio(AudioFormat {
 			sample_rate: self.sample_rate,
 			channels: self.channels,
