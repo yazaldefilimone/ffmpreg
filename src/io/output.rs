@@ -25,6 +25,12 @@ impl<'a, P: AsRef<Path>> OutputBuilder<'a, P> {
 		&mut self.format
 	}
 
+	pub fn format_codec(&mut self, codec: &Option<String>) -> Result<()> {
+		if let Some(codec) = codec.as_ref() {
+			self.format.apply_codec(codec)?;
+		}
+		Ok(())
+	}
 	pub fn build(self) -> Result<Output> {
 		let path_ref = self.path.as_ref();
 		let extension = utils::extension_from_path(path_ref)?;
