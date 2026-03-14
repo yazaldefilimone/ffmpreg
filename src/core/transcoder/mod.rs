@@ -2,13 +2,13 @@ pub mod router;
 
 use crate::core::Selector;
 use crate::core::Track;
+use crate::core::filter::FilterGraph;
 use crate::core::frame::Frame;
 use crate::core::packet::Packet;
 use crate::core::resampler::AudioResampler;
 use crate::core::resolver::CodecResolver;
 use crate::core::track::{AudioFormat, Format, TrackFormat};
 use crate::core::traits::{Decoder, Encoder, Resampler, Transform};
-use crate::core::transform::TransformGraph;
 use crate::message::Result;
 
 pub use router::Router;
@@ -17,12 +17,12 @@ pub struct Transcoder {
 	decoder: Box<dyn Decoder>,
 	encoder: Box<dyn Encoder>,
 	resampler: Option<Box<dyn Resampler>>,
-	transforms: TransformGraph,
+	transforms: FilterGraph,
 }
 
 impl Transcoder {
 	pub fn new(decoder: Box<dyn Decoder>, encoder: Box<dyn Encoder>) -> Self {
-		let transforms = TransformGraph::new();
+		let transforms = FilterGraph::new();
 		Self { decoder, encoder, resampler: None, transforms }
 	}
 
@@ -57,7 +57,7 @@ impl Transcoder {
 	}
 
 	pub fn encoder_input_format(&self) -> TrackFormat {
-		self.encoder.input_format()
+		self.encoder.format()
 	}
 
 	pub fn transcode(
