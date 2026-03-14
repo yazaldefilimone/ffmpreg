@@ -25,7 +25,7 @@ impl YuvEncoder {
 }
 
 impl Encoder for YuvEncoder {
-	fn input_format(&self) -> TrackFormat {
+	fn format(&self) -> TrackFormat {
 		TrackFormat::Video(VideoFormat {
 			width: self.width,
 			height: self.height,
@@ -45,9 +45,8 @@ impl Encoder for YuvEncoder {
 		let time = Time::new(fps_den, fps_num)?;
 
 		let is_key = video.is_key();
-		let packet = Packet::new(data, frame.track_id, time)
-			.with_pts(frame.pts().pts)
-			.with_keyframe(is_key);
+		let packet =
+			Packet::new(data, frame.track_id, time).with_pts(frame.pts().pts).with_keyframe(is_key);
 
 		Ok(PacketIter::new(vec![packet]))
 	}
