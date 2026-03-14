@@ -1,4 +1,4 @@
-use crate::core::time::Timestamp;
+use crate::{core::time::Timestamp, message};
 
 pub mod audio;
 pub mod iter;
@@ -8,94 +8,54 @@ pub use audio::*;
 pub use iter::*;
 pub use subtitle::*;
 pub use video::*;
-
 #[derive(Debug, Clone)]
-pub enum FrameData {
-	Audio(FrameAudio),
-	Video(FrameVideo),
+
+pub enum MediaFrame {
+	Audio(AudioFrame),
+	Video(VideoFrame),
 }
 
 #[derive(Debug, Clone)]
 pub struct Frame {
-	pub track_id: usize,
-	pub data: FrameData,
+	pub stream_id: usize,
+	pub data: MediaFrame,
+	pub pts: Timestamp,
 }
 
 impl Frame {
-	pub fn new_audio(audio: FrameAudio, track_id: usize) -> Self {
-		Self { track_id, data: FrameData::Audio(audio) }
-	}
-
-	pub fn new_video(video: FrameVideo, track_id: usize) -> Self {
-		Self { track_id, data: FrameData::Video(video) }
-	}
-
-	#[inline(always)]
-	pub fn size(&self) -> usize {
-		match &self.data {
-			FrameData::Audio(audio) => audio.data.len(),
-			FrameData::Video(video) => video.size(),
+	pub fn map_audio<F>(&mut self, func: F) -> message::Result<()>
+	where
+		F: FnOnce(AudioFrame) -> message::Result<AudioFrame>,
+	{
+		if let MediaFrame::Audio(inner) =
+			std::mem::replace(&mut self.data, MediaFrame::Audio(AudioFrame::empty()))
+		{
+			self.data = MediaFrame::Audio(func(inner)?);
 		}
+		Ok(())
 	}
 
-	#[inline(always)]
-	pub fn is_empty(&self) -> bool {
-		self.size() == 0
+	pub fn map_video<F>(&mut self, func: F) -> message::Result<()>
+	where
+		F: FnOnce(VideoFrame) -> message::Result<VideoFrame>,
+	{
+		if let MediaFrame::Video(inner) =
+			std::mem::replace(&mut self.data, MediaFrame::Video(VideoFrame::empty()))
+		{
+			self.data = MediaFrame::Video(func(inner)?);
+		}
+		Ok(())
 	}
 
-	#[inline(always)]
+	pub fn is_audio(&self) -> bool {
+		matches!(self.data, MediaFrame::Audio(_))
+	}
+
+	pub fn is_video(&self) -> bool {
+		matches!(self.data, MediaFrame::Video(_))
+	}
+
 	pub fn pts(&self) -> Timestamp {
-		match &self.data {
-			FrameData::Audio(audio) => audio.pts,
-			FrameData::Video(video) => video.pts,
-		}
-	}
-
-	#[inline(always)]
-	pub fn audio(&self) -> Option<&FrameAudio> {
-		match &self.data {
-			FrameData::Audio(audio) => Some(audio),
-			_ => None,
-		}
-	}
-
-	#[inline(always)]
-	pub fn audio_mut(&mut self) -> Option<&mut FrameAudio> {
-		match &mut self.data {
-			FrameData::Audio(audio) => Some(audio),
-			_ => None,
-		}
-	}
-
-	#[inline(always)]
-	pub fn video(&self) -> Option<&FrameVideo> {
-		match &self.data {
-			FrameData::Video(video) => Some(video),
-			_ => None,
-		}
-	}
-
-	#[inline(always)]
-	pub fn video_mut(&mut self) -> Option<&mut FrameVideo> {
-		match &mut self.data {
-			FrameData::Video(video) => Some(video),
-			_ => None,
-		}
-	}
-
-	#[inline(always)]
-	pub fn into_audio(self) -> Option<FrameAudio> {
-		match self.data {
-			FrameData::Audio(audio) => Some(audio),
-			_ => None,
-		}
-	}
-
-	#[inline(always)]
-	pub fn into_video(self) -> Option<FrameVideo> {
-		match self.data {
-			FrameData::Video(video) => Some(video),
-			_ => None,
-		}
+		self.pts
 	}
 }
