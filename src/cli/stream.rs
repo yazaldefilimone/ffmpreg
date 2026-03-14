@@ -12,6 +12,12 @@ pub struct StreamOption {
 }
 
 impl StreamOption {
+	pub fn default(kind: StreamKind) -> Self {
+		let table = FxHashMap::default();
+		let selector = Selector::Id(0);
+		StreamOption { selector, codec: None, kind, table }
+	}
+
 	pub fn from_raw(raw: &str, kind: StreamKind) -> message::Result<Self> {
 		let mut selector = Selector::All;
 		let mut codec = None;
@@ -55,12 +61,22 @@ pub fn parse_stream_options(
 	for raw in audio {
 		options.push(StreamOption::from_raw(raw, StreamKind::Audio)?);
 	}
+
 	for raw in video {
 		options.push(StreamOption::from_raw(raw, StreamKind::Video)?);
 	}
+
 	for raw in subtitle {
 		options.push(StreamOption::from_raw(raw, StreamKind::Subtitle)?);
 	}
+
+	if audio.is_empty() {
+		options.push(StreamOption::default(StreamKind::Audio));
+	}
+	if video.is_empty() {
+		options.push(StreamOption::default(StreamKind::Video));
+	}
+
 	Ok(options)
 }
 
