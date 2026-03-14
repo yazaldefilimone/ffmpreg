@@ -15,6 +15,6 @@ impl NodeId {
 }
 
 pub trait Node {
-	fn process(&mut self, input: Media) -> Result<Vec<Media>>;
+	fn run(&mut self, input: Media) -> Result<Vec<Media>>;
 	fn flush(&mut self) -> Result<Vec<Media>>;
 }
