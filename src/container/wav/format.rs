@@ -17,8 +17,8 @@ impl Default for WavFormat {
 		Self {
 			channels: Channels::Stereo,
 			sample_rate: SampleRate::SR44_1K,
-			bit_depth: BitDepth::Bit16,
-			format_code: 1,
+			bit_depth: BitDepth::Bit32,
+			format_code: 3,
 		}
 	}
 }
@@ -26,7 +26,7 @@ impl Default for WavFormat {
 impl WavFormat {
 	pub fn new_for_codec(codec: &str) -> Result<Self, String> {
 		match codec {
-			"pcm_s16le" => Ok(Self::default()),
+			"pcm_s16le" => Ok(Self { bit_depth: BitDepth::Bit16, format_code: 1, ..Self::default() }),
 			"pcm_s24le" => Ok(Self { bit_depth: BitDepth::Bit24, ..Self::default() }),
 			"pcm_f32le" => Ok(Self { bit_depth: BitDepth::Bit32, format_code: 3, ..Self::default() }),
 			_ => Err(format!("wav codec '{}' is not supported", codec)),
@@ -58,7 +58,7 @@ impl WavFormat {
 			16 => "pcm_s16le",
 			24 => "pcm_s24le",
 			32 => "pcm_f32le",
-			_ => "pcm_s16le",
+			_ => "pcm_f32le",
 		}
 	}
 
@@ -67,7 +67,7 @@ impl WavFormat {
 			16 => codecs::PCM_S16LE,
 			24 => codecs::PCM_S24LE,
 			32 => codecs::PCM_F32LE,
-			_ => codecs::PCM_S16LE,
+			_ => codecs::PCM_F32LE,
 		}
 	}
 
