@@ -12,7 +12,7 @@ fn main() -> Result<()> {
 
 	let codec_out = resolver.codec_for_extension(&output.extension)?;
 
-	audio_track.add_codec_out(codec_out);
+	audio_track.codec_out(codec_out);
 
 	let mut decoder = resolver.decoder_for(&audio_track)?;
 	let mut encoder = resolver.encoder_for(&audio_track, output.format())?;
