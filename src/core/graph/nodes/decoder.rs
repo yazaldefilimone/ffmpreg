@@ -13,7 +13,7 @@ impl DecoderNode {
 }
 
 impl Node for DecoderNode {
-	fn process(&mut self, input: Media) -> Result<Vec<Media>> {
+	fn run(&mut self, input: Media) -> Result<Vec<Media>> {
 		let packet = input.into_packet()?;
 		let frames = self.decoder.decode(packet)?;
 		let output = frames.map(Media::Frame).collect();
