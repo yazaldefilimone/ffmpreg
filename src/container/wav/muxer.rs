@@ -1,158 +1,89 @@
-use super::format::WavFormat;
-use crate::core::Muxer;
-use crate::core::packet::Packet;
-use crate::core::track::{Format, Metadata};
-use crate::io::{BinaryWrite, MediaSeek, MediaWrite, SeekFrom};
-use crate::{error, message::Result};
+use crate::core::{Muxer, Packet, Stream};
+use crate::io::Io;
+use crate::message::Result;
 
-pub struct WavMuxer<W: MediaWrite + MediaSeek> {
-	writer: W,
-	_format: WavFormat,
-	metadata: Option<Metadata>,
-	data_size: u32,
-	data_size_pos: u64,
-	file_size_pos: u64,
+pub struct WavMuxer {
+	io: Box<dyn Io>,
+	written: u64,
+	streamed: bool,
 }
 
-impl<W: MediaWrite + MediaSeek> WavMuxer<W> {
-	pub fn new(mut writer: W, format: WavFormat) -> Result<Self> {
-		let (file_size_pos, data_size_pos) = Self::write_header(&mut writer, &format)?;
-		writer.flush()?;
-
-		Ok(Self { writer, _format: format, metadata: None, data_size: 0, data_size_pos, file_size_pos })
+impl WavMuxer {
+	pub fn new(io: Box<dyn Io>) -> Self {
+		Self { io, written: 0, streamed: false }
 	}
 
-	pub fn from_format(writer: W, format: &Format) -> Result<Self> {
-		let audio_format = match format {
-			Format::Wav(audio) => audio,
-			_ => return Err(error!("wav does not support non-audio tracks")),
-		};
-		let muxer = Self::new(writer, *audio_format)?;
-		Ok(muxer)
-	}
+	fn write_header(&mut self, stream: &Stream) -> Result<()> {
+		let p = &stream.parameters;
 
-	fn write_header(writer: &mut W, format: &WavFormat) -> Result<(u64, u64)> {
-		writer.write_all(b"RIFF")?;
-		let file_size_pos = writer.stream_position()?;
-		writer.write_u32_le(0)?;
-		writer.write_all(b"WAVE")?;
-		writer.write_all(b"fmt ")?;
+		let sample_rate = p.sample_rate.ok_or("missing sample_rate")?;
+		let channels = p.channels.ok_or("missing channels")?;
+		let (format_tag, bits_per_sample) = wav_format_from_codec(&p.codec.id)?;
+		let bytes_per_sample = u32::from(bits_per_sample).div_ceil(8);
+		let byte_rate = sample_rate * u32::from(channels) * bytes_per_sample;
+		let block_align = u16::from(channels) * bits_per_sample.div_ceil(8);
 
-		let fmt_size = match format.format_code {
-			3 => 18,
-			0x11 => 20,
-			_ => 16,
-		};
-		writer.write_u32_le(fmt_size)?;
-		writer.write_u16_le(format.format_code)?;
-		writer.write_u16_le(format.channels.count() as u16)?;
-		writer.write_u32_le(format.sample_rate.value())?;
-		writer.write_u32_le(format.byte_rate())?;
-		writer.write_u16_le(format.block_align())?;
-		writer.write_u16_le(format.bit_depth.bits() as u16)?;
+		let mut header = [0u8; 44];
 
-		if format.format_code == 3 {
-			writer.write_u16_le(0)?;
-		} else if format.format_code == 0x11 {
-			writer.write_u16_le(4)?;
-			let spb = ((512 - 4 * format.channels.count() as usize) * 2 + 1) as u16;
-			writer.write_u16_le(spb)?;
-		}
+		header[0..4].copy_from_slice(b"RIFF");
+		header[8..12].copy_from_slice(b"WAVE");
+		header[12..16].copy_from_slice(b"fmt ");
+		header[16..20].copy_from_slice(&(16u32).to_le_bytes());
+		header[20..22].copy_from_slice(&format_tag.to_le_bytes());
+		header[22..24].copy_from_slice(&(channels as u16).to_le_bytes());
+		header[24..28].copy_from_slice(&sample_rate.to_le_bytes());
+		header[28..32].copy_from_slice(&byte_rate.to_le_bytes());
+		header[32..34].copy_from_slice(&block_align.to_le_bytes());
+		header[34..36].copy_from_slice(&bits_per_sample.to_le_bytes());
+		header[36..40].copy_from_slice(b"data");
 
-		writer.write_all(b"data")?;
-		let data_size_pos = writer.stream_position()?;
-		writer.write_u32_le(0)?;
-		Ok((file_size_pos, data_size_pos))
-	}
+		self.io.write_all(&header)?;
+		self.streamed = true;
 
-	pub fn write_packet(&mut self, packet: Packet) -> Result<()> {
-		self.writer.write_all(&packet.data)?;
-		self.data_size += packet.data.len() as u32;
 		Ok(())
-	}
-
-	pub fn finalize_muxer(&mut self) -> Result<()> {
-		self.writer.seek(SeekFrom::Start(self.data_size_pos))?;
-		self.writer.write_u32_le(self.data_size)?;
-
-		let mut file_size = self.data_size + 36;
-
-		if let Some(meta) = &self.metadata {
-			if !meta.is_empty() {
-				file_size += Self::calc_list_size(meta) as u32;
-				self.writer.seek(SeekFrom::End(0))?;
-				Self::write_list_chunk(&mut self.writer, meta)?;
-			}
-		}
-
-		self.writer.seek(SeekFrom::Start(self.file_size_pos))?;
-		self.writer.write_u32_le(file_size)?;
-		self.writer.flush()?;
-		Ok(())
-	}
-
-	fn calc_list_size(metadata: &Metadata) -> u64 {
-		let fields = metadata.export_fields();
-		fields.values().fold(8, |acc, v| {
-			let byte_len = v.as_bytes().len();
-			let mut size = acc + 8 + byte_len as u64 + 1;
-			if (byte_len + 1) % 2 == 1 {
-				size += 1;
-			}
-			size
-		})
-	}
-
-	fn write_list_chunk(writer: &mut W, metadata: &Metadata) -> Result<()> {
-		if metadata.is_empty() {
-			return Ok(());
-		}
-
-		let list_size = Self::calc_list_size(metadata) - 8;
-		writer.write_all(b"LIST")?;
-		writer.write_u32_le(list_size as u32)?;
-		writer.write_all(b"INFO")?;
-
-		let fields = metadata.export_fields();
-		for (field, value) in fields {
-			let id: &[u8; 4] = match field.as_str() {
-				"artist" => b"IART",
-				"title" => b"INAM",
-				"comment" => b"ICOM",
-				"copyright" => b"ICOP",
-				"software" => b"ISFT",
-				"genre" => b"IGNR",
-				"track" => b"ITRK",
-				_ => continue,
-			};
-			Self::write_wav_tag(writer, id, &value)?;
-		}
-		Ok(())
-	}
-
-	fn write_wav_tag(writer: &mut W, id: &[u8; 4], value: &str) -> Result<()> {
-		let value_len = value.len() + 1;
-		writer.write_all(id)?;
-		writer.write_u32_le(value_len as u32)?;
-		writer.write_all(value.as_bytes())?;
-		writer.write_u8(0)?;
-		if value_len % 2 == 1 {
-			writer.write_u8(0)?;
-		}
-		Ok(())
-	}
-}
-
-impl<W: MediaWrite + MediaSeek> Muxer for WavMuxer<W> {
-	fn write(&mut self, packet: Packet) -> Result<()> {
-		self.write_packet(packet)
 	}
 
 	fn finalize(&mut self) -> Result<()> {
-		self.finalize_muxer()
+		let file_size = 36 + self.written;
+
+		self.io.seek(4)?;
+		self.io.write_all(&(file_size as u32).to_le_bytes())?;
+
+		self.io.seek(40)?;
+		self.io.write_all(&(self.written as u32).to_le_bytes())?;
+
+		Ok(())
+	}
+}
+
+impl Muxer for WavMuxer {
+	fn add(&mut self, stream: &Stream) -> Result<usize> {
+		if self.streamed {
+			return Err("wav supports only one stream".into());
+		}
+		self.write_header(stream)?;
+		Ok(0)
 	}
 
-	fn set_metadata(&mut self, metadata: Option<Metadata>) {
-		self.metadata = metadata;
+	fn write(&mut self, packet: Packet) -> Result<()> {
+		self.io.write_all(&packet.data)?;
+		self.written += packet.data.len() as u64;
+		Ok(())
+	}
+
+	fn finish(&mut self) -> Result<()> {
+		self.finalize()
+	}
+}
+
+fn wav_format_from_codec(codec: &str) -> Result<(u16, u16)> {
+	match codec {
+		"pcm_u8" => Ok((1, 8)),
+		"pcm_s16" | "pcm_s16le" => Ok((1, 16)),
+		"pcm_s24" | "pcm_s24le" => Ok((1, 24)),
+		"pcm_s32" | "pcm_s32le" => Ok((1, 32)),
+		"pcm_f32" | "pcm_f32le" => Ok((3, 32)),
+		"pcm_f64" | "pcm_f64le" => Ok((3, 64)),
+		_ => Err("unsupported wav codec".into()),
 	}
 }

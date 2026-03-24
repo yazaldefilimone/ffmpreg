@@ -1,12 +1,6 @@
-mod container;
-pub mod format;
-pub mod mkv;
+mod detect;
+mod select;
 pub mod wav;
-pub mod yuv;
-
-mod constants;
-mod register;
-
-pub use constants::*;
-pub use container::*;
-pub use register::*;
+pub mod y4m;
+pub use detect::*;
+pub use select::*;

@@ -1,236 +1,275 @@
-use super::format::WavFormat;
-use super::header::WavHeader;
-use crate::container::constants::CHUNK_SIZE_LIMIT;
-use crate::core::frame::Channels;
-use crate::core::packet::Packet;
-use crate::core::time::{Time, Timestamp};
-use crate::core::track::{AudioFormat, Metadata, TrackFormat};
-use crate::core::{Demuxer, Track, Tracks};
-use crate::io::{BinaryRead, MediaRead};
-use crate::{error, message::Result};
+use crate::Message;
+use crate::core::{CodecId, Demuxer, Packet, Stream, StreamId, StreamSet, Time};
+use crate::io::Io;
+use crate::message::Result;
 
-pub struct WavDemuxer<R: MediaRead> {
-	reader: R,
-	format: WavFormat,
-	track: Track,
-	metadata: Metadata,
-	remaining_bytes: u64,
-	samples_read: u64,
-	packet_count: u64,
-	time: Time,
-	read_buf: Vec<u8>,
+pub struct WavDemuxer {
+	io: Box<dyn Io>,
+	streams: StreamSet,
+	data_start: u64,
+	size: u64,
+	remaining: u64,
+	byte_rate: u32,
+	block_align: u16,
 }
 
-impl<R: MediaRead> WavDemuxer<R> {
-	pub fn new(mut reader: R) -> Result<Self> {
-		let (header, metadata, remaining_bytes) = Self::read_wav_and_find_data(&mut reader)?;
-		header.validate()?;
+impl WavDemuxer {
+	pub fn new(mut io: Box<dyn Io>) -> Result<Self> {
+		let mut riff_header = [0u8; 12];
+		read_exact(&mut *io, &mut riff_header)?;
+		if &riff_header[0..4] != b"RIFF" || &riff_header[8..12] != b"WAVE" {
+			return Err(Message::Container("invalid wav header"));
+		}
 
-		let format = header.to_format();
-		let time = Time::new(1, header.sample_rate)?;
-		let block_align = format.block_align() as u64;
-		let max_chunk = (CHUNK_SIZE_LIMIT as u64 / block_align) * block_align;
-		let codec_in = format.to_codec_id();
-
-		let audio_format = AudioFormat {
-			channels: format.channels,
-			bit_depth: format.bit_depth,
-			sample_rate: format.sample_rate,
-		};
-
-		let track = Track {
-			id: 0,
-			codec_in,
-			codec_out: codec_in,
-			timestamp: Timestamp::zero(time),
-			format: TrackFormat::Audio(audio_format),
-		};
-
-		Ok(Self {
-			reader,
-			format,
-			track,
-			metadata,
-			remaining_bytes,
-			samples_read: 0,
-			packet_count: 0,
-			time,
-			read_buf: vec![0u8; max_chunk as usize],
-		})
-	}
-
-	fn read_wav_and_find_data(reader: &mut R) -> Result<(WavHeader, Metadata, u64)> {
-		Self::check_fourcc_eq(reader, b"RIFF")?;
-		let _file_size = reader.read_u32_le()?;
-		Self::check_fourcc_eq(reader, b"WAVE")?;
-
-		let mut header = WavHeader::default();
-		let mut metadata = Metadata::default();
+		let mut offset = 12u64;
+		let mut channels = None;
+		let mut sample_rate = None;
+		let mut byte_rate = None;
+		let mut block_align = None;
+		let mut bits_per_sample = None;
+		let mut codec = None;
+		let mut data_start = None;
+		let mut size = None;
 
 		loop {
-			let mut chunk_id = [0u8; 4];
-			reader.read_exact(&mut chunk_id)?;
-			let chunk_size = reader.read_u32_le()? as u64;
-
-			match &chunk_id {
-				b"fmt " => Self::read_fmt_chunk(reader, chunk_size, &mut header)?,
-				b"LIST" => Self::read_list_chunk(reader, chunk_size, &mut metadata)?,
-				b"data" => return Ok((header, metadata, chunk_size)),
-				_ => Self::skip_bytes(reader, chunk_size)?,
+			let mut chunk_header = [0u8; 8];
+			if read_exact_or_eof(&mut *io, &mut chunk_header)? == 0 {
+				break;
 			}
-		}
-	}
+			offset += 8;
 
-	fn read_fmt_chunk(reader: &mut R, chunk_size: u64, header: &mut WavHeader) -> Result<()> {
-		if chunk_size < 16 {
-			return Err(error!("fmt chunk too small"));
-		}
+			let chunk_id = &chunk_header[0..4];
+			let chunk_size = u32::from_le_bytes(chunk_header[4..8].try_into().unwrap()) as u64;
+			let padded_size = chunk_size + (chunk_size & 1);
 
-		header.format_code = reader.read_u16_le()?;
-		header.channels = Channels::from_count(reader.read_u16_le()? as u8);
-		header.sample_rate = reader.read_u32_le()?;
-		header.byte_rate = reader.read_u32_le()?;
-		header.block_align = reader.read_u16_le()?;
-		header.bits_per_sample = reader.read_u16_le()?;
+			if chunk_id == b"fmt " {
+				if chunk_size < 16 {
+					return Err(Message::Container("invalid wav fmt chunk"));
+				}
 
-		if chunk_size > 16 {
-			Self::skip_bytes(reader, chunk_size - 16)?;
-		}
-		Ok(())
-	}
+				let mut fmt = vec![0u8; chunk_size as usize];
+				read_exact(&mut *io, &mut fmt)?;
+				offset += chunk_size;
 
-	fn read_list_chunk(reader: &mut R, chunk_size: u64, metadata: &mut Metadata) -> Result<()> {
-		if chunk_size < 4 {
-			return Ok(());
-		}
+				let format_tag = u16::from_le_bytes(fmt[0..2].try_into().unwrap());
+				let fmt_channels = u16::from_le_bytes(fmt[2..4].try_into().unwrap());
+				let fmt_sample_rate = u32::from_le_bytes(fmt[4..8].try_into().unwrap());
+				let fmt_byte_rate = u32::from_le_bytes(fmt[8..12].try_into().unwrap());
+				let fmt_block_align = u16::from_le_bytes(fmt[12..14].try_into().unwrap());
+				let fmt_bits_per_sample = u16::from_le_bytes(fmt[14..16].try_into().unwrap());
 
-		let mut form_type = [0u8; 4];
-		reader.read_exact(&mut form_type)?;
-		if form_type != *b"INFO" {
-			return Self::skip_bytes(reader, chunk_size - 4);
-		}
+				let resolved_codec = resolve_codec_id(format_tag, fmt_bits_per_sample, &fmt)?;
 
-		let mut pos = 4u64;
-		while pos + 8 <= chunk_size {
-			let mut id = [0u8; 4];
-			reader.read_exact(&mut id)?;
-			let size = reader.read_u32_le()? as u64;
-			pos += 8;
+				if fmt_channels == 0 {
+					return Err(Message::Container("invalid wav channel count"));
+				}
+				if fmt_sample_rate == 0 {
+					return Err(Message::Container("invalid wav sample rate"));
+				}
+				if fmt_block_align == 0 {
+					return Err(Message::Container("invalid wav block align"));
+				}
+				if fmt_byte_rate == 0 {
+					return Err(Message::Container("invalid wav byte rate"));
+				}
 
-			let data = Self::read_bytes(reader, size)?;
-			pos += size;
+				channels = Some(fmt_channels);
+				sample_rate = Some(fmt_sample_rate);
+				byte_rate = Some(fmt_byte_rate);
+				block_align = Some(fmt_block_align);
+				bits_per_sample = Some(fmt_bits_per_sample);
+				codec = Some(resolved_codec);
 
-			let value = String::from_utf8_lossy(&data).trim_end_matches('\0').to_string();
-			Self::apply_wav_tag(metadata, &id, value);
-
-			if size % 2 == 1 {
-				reader.read_u8()?;
-				pos += 1;
+				if padded_size > chunk_size {
+					skip_exact(&mut *io, padded_size - chunk_size)?;
+					offset += padded_size - chunk_size;
+				}
+				continue;
 			}
+
+			if chunk_id == b"data" {
+				data_start = Some(offset);
+				size = Some(chunk_size);
+				break;
+			}
+
+			skip_exact(&mut *io, padded_size)?;
+			offset += padded_size;
 		}
-		Ok(())
-	}
+		let fmt_err = || Message::Container("wav fmt chunk not found");
+		let data_err = || Message::Container("wav data chunk not found");
 
-	/// Map WAV RIFF INFO tags to standard metadata field names.
-	fn apply_wav_tag(metadata: &mut Metadata, id: &[u8; 4], value: String) {
-		let key = match id {
-			b"IART" => "artist",
-			b"INAM" => "title",
-			b"ICOM" => "comment",
-			b"ICOP" => "copyright",
-			b"ISFT" => "software",
-			b"IGNR" => "genre",
-			b"ITRK" => "track",
-			_ => return,
-		};
-		metadata.set(key, value);
-	}
+		let channels = channels.ok_or_else(fmt_err)?;
+		let sample_rate = sample_rate.ok_or_else(fmt_err)?;
+		let byte_rate = byte_rate.ok_or_else(fmt_err)?;
+		let block_align = block_align.ok_or_else(fmt_err)?;
+		let bits_per_sample = bits_per_sample.ok_or_else(fmt_err)?;
+		let codec = codec.ok_or_else(fmt_err)?;
 
-	fn check_fourcc_eq(reader: &mut R, expected: &[u8; 4]) -> Result<()> {
-		let mut buf = [0u8; 4];
-		reader.read_exact(&mut buf)?;
-		if buf != *expected {
-			return Err(error!(
-				"expected {}, found {}",
-				String::from_utf8_lossy(expected),
-				String::from_utf8_lossy(&buf)
-			));
-		}
-		Ok(())
-	}
+		let data_start = data_start.ok_or_else(data_err)?;
+		let size = size.ok_or_else(data_err)?;
 
-	fn read_bytes(reader: &mut R, size: u64) -> Result<Vec<u8>> {
-		let mut buf = vec![0u8; size as usize];
-		reader.read_exact(&mut buf)?;
-		Ok(buf)
-	}
-
-	fn skip_bytes(reader: &mut R, mut size: u64) -> Result<()> {
-		const BUF_SIZE: usize = 8192;
-		let mut buf = [0u8; BUF_SIZE];
-		while size > 0 {
-			let read_size = std::cmp::min(size, BUF_SIZE as u64) as usize;
-			reader.read_exact(&mut buf[..read_size])?;
-			size -= read_size as u64;
-		}
-		Ok(())
-	}
-
-	pub fn read_packet(&mut self) -> Result<Option<Packet>> {
-		if self.remaining_bytes == 0 {
-			return Ok(None);
+		if bits_per_sample == 0 {
+			return Err(Message::Container("invalid wav bits per sample"));
 		}
 
-		let read_len = std::cmp::min(self.remaining_bytes as usize, self.read_buf.len());
-		let bytes_read = self.reader.read(&mut self.read_buf[..read_len])?;
-		if bytes_read == 0 {
-			return Ok(None);
+		let bytes_per_sample = bits_per_sample.div_ceil(8);
+		let expected_block_align = u32::from(channels) * u32::from(bytes_per_sample);
+		if u32::from(block_align) != expected_block_align {
+			return Err(Message::Container("inconsistent wav block align"));
 		}
 
-		let data = self.read_buf[..bytes_read].to_vec();
-		self.remaining_bytes -= bytes_read as u64;
+		let expected_byte_rate = sample_rate * expected_block_align;
+		if byte_rate != expected_byte_rate {
+			return Err(Message::Container("inconsistent wav byte rate"));
+		}
 
-		let packet = Packet::new(data, 0, self.time).with_pts(self.samples_read as i64);
+		let stream = Stream::audio(StreamId(0), sample_rate, channels as u8, codec);
 
-		self.samples_read += (bytes_read / self.format.bytes_per_frame()) as u64;
-		self.packet_count += 1;
+		let mut streams = StreamSet::default();
+		streams.add(stream);
 
-		Ok(Some(packet))
-	}
-
-	pub fn format(&self) -> WavFormat {
-		self.format
-	}
-
-	pub fn metadata(&self) -> &Metadata {
-		&self.metadata
+		Ok(Self { io, streams, data_start, size, remaining: size, byte_rate, block_align })
 	}
 }
 
-impl<R: MediaRead> Demuxer for WavDemuxer<R> {
+impl Demuxer for WavDemuxer {
 	fn read(&mut self) -> Result<Option<Packet>> {
-		self.read_packet()
+		if self.remaining == 0 {
+			return Ok(None);
+		}
+
+		let align = usize::from(self.block_align.max(1));
+		let mut size = 4096.min(self.remaining as usize);
+		if size > align {
+			size -= size % align;
+		}
+		if size == 0 {
+			size = self.remaining as usize;
+		}
+		let mut data = vec![0u8; size];
+		let n = self.io.read(&mut data)?;
+
+		if n == 0 {
+			return Ok(None);
+		}
+
+		data.truncate(n);
+		self.remaining -= n as u64;
+
+		Ok(Some(Packet { stream_id: StreamId(0), data, pts: None, dts: None, duration: None }))
 	}
 
-	fn seek(&mut self, _time: f64) -> Result<()> {
-		Err(error!("seek not implemented for wav"))
+	fn streams(&self) -> &StreamSet {
+		&self.streams
 	}
 
-	fn duration(&self) -> Option<f64> {
-		let bytes_sample = self.format.bytes_per_sample() as u64;
+	fn seek(&mut self, time: f64) -> Result<()> {
+		if !time.is_finite() || time < 0.0 {
+			return Err("invalid seek time".into());
+		}
 
-		let total_samples = self.samples_read + self.remaining_bytes / bytes_sample;
+		if self.byte_rate == 0 {
+			return Err("invalid wav byte rate".into());
+		}
 
-		let rate = self.format.sample_rate.value() as f64;
+		let raw_offset = (time * self.byte_rate as f64).floor() as u64;
+		let align = u64::from(self.block_align.max(1));
+		let aligned_offset = (raw_offset / align) * align;
+		let clamped_offset = aligned_offset.min(self.size);
 
-		Some(total_samples as f64 / rate)
+		self.io.seek(self.data_start + clamped_offset)?;
+		self.remaining = self.size.saturating_sub(clamped_offset);
+		Ok(())
+	}
+	fn duration(&self) -> Time {
+		let stream = self.streams.get(StreamId(0)).unwrap();
+		let tb = stream.time_base;
+
+		if self.block_align == 0 {
+			return Time::zero(tb);
+		}
+
+		let samples = (self.size / self.block_align as u64) as u64;
+		Time::new(samples, tb)
+	}
+}
+
+fn read_exact(io: &mut dyn Io, mut buf: &mut [u8]) -> Result<()> {
+	while !buf.is_empty() {
+		let n = io.read(buf)?;
+		if n == 0 {
+			return Err(Message::Container("unexpected end of file"));
+		}
+		let (_, rest) = buf.split_at_mut(n);
+		buf = rest;
+	}
+	Ok(())
+}
+
+fn read_exact_or_eof(io: &mut dyn Io, mut buf: &mut [u8]) -> Result<usize> {
+	let mut total = 0;
+	while !buf.is_empty() {
+		let n = io.read(buf)?;
+		if n == 0 {
+			if total == 0 {
+				return Ok(0);
+			}
+			return Err(Message::Container("unexpected end of file"));
+		}
+		total += n;
+		let (_, rest) = buf.split_at_mut(n);
+		buf = rest;
+	}
+	Ok(total)
+}
+
+fn skip_exact(io: &mut dyn Io, mut size: u64) -> Result<()> {
+	let mut buf = [0u8; 1024];
+	while size > 0 {
+		let chunk = (buf.len() as u64).min(size) as usize;
+		let n = io.read(&mut buf[..chunk])?;
+		if n == 0 {
+			return Err(Message::Container("unexpected end of file"));
+		}
+		size -= n as u64;
+	}
+	Ok(())
+}
+
+fn resolve_codec_id(format_tag: u16, bits_per_sample: u16, fmt: &[u8]) -> Result<CodecId> {
+	let resolved_tag =
+		if format_tag == 0xFFFE { resolve_extensible_subformat(fmt)? } else { format_tag };
+
+	match resolved_tag {
+		1 => match bits_per_sample {
+			8 => Ok(CodecId::new("pcm_u8")),
+			16 => Ok(CodecId::new("pcm_s16le")),
+			24 => Ok(CodecId::new("pcm_s24le")),
+			32 => Ok(CodecId::new("pcm_s32le")),
+			64 => Ok(CodecId::new("pcm_s64le")),
+			_ => Err(Message::Container("unsupported wav pcm bit depth")),
+		},
+		3 => match bits_per_sample {
+			32 => Ok(CodecId::new("pcm_f32le")),
+			64 => Ok(CodecId::new("pcm_f64le")),
+			_ => Err(Message::Container("unsupported wav float bit depth")),
+		},
+		6 => Ok(CodecId::new("pcm_alaw")),
+		7 => Ok(CodecId::new("pcm_mulaw")),
+		_ => Err(Message::Container("unsupported wav format")),
+	}
+}
+
+fn resolve_extensible_subformat(fmt: &[u8]) -> Result<u16> {
+	if fmt.len() < 40 {
+		return Err(Message::Container("invalid wav extensible chunk"));
 	}
 
-	fn tracks(&self) -> Tracks {
-		Tracks::new(vec![self.track])
+	let cb_size = u16::from_le_bytes(fmt[16..18].try_into().unwrap());
+	if cb_size < 22 {
+		return Err(Message::Container("invalid wav extensible size"));
 	}
 
-	fn metadata(&self) -> &Metadata {
-		&self.metadata
-	}
+	Ok(u16::from_le_bytes(fmt[24..26].try_into().unwrap()))
 }

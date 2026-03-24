@@ -1,109 +1,76 @@
-use crate::core::packet::Packet;
-use crate::core::resolver::ContainerResolver;
-use crate::core::track::Metadata;
-use crate::core::{Muxer, track::Format};
+use crate::Message;
+use crate::core::{Hint, Packet, Stream};
 use crate::io::File;
 use crate::message::Result;
-use crate::utils;
-use std::path::{Path, PathBuf};
-
-pub struct OutputBuilder<'a, P: AsRef<Path>> {
-	path: P,
-	resolver: &'a ContainerResolver,
-	format: Format,
-}
-
-impl<'a, P: AsRef<Path>> OutputBuilder<'a, P> {
-	pub fn inherit_from(mut self, input: &crate::io::Input) -> Self {
-		if let Some(audio) = input.tracks.primary_audio().ok().and_then(|t| t.audio_format()) {
-			self.format.inherit_audio(audio);
-		}
-		self
-	}
-
-	pub fn format_mut(&mut self) -> &mut Format {
-		&mut self.format
-	}
-
-	pub fn format_codec(&mut self, codec: &Option<String>) -> Result<()> {
-		if let Some(codec) = codec.as_ref() {
-			self.format.apply_codec(codec)?;
-		}
-		Ok(())
-	}
-	pub fn build(self) -> Result<Output> {
-		let path_ref = self.path.as_ref();
-		let extension = utils::extension_from_path(path_ref)?;
-		let path_str = path_ref.to_string_lossy();
-
-		let file = File::create(&path_str)?;
-		let muxer = self.resolver.open_muxer(&extension, file, &self.format)?;
-
-		Ok(Output { path: path_ref.to_path_buf(), extension, format: self.format, muxer })
-	}
-}
+use crate::{core::Muxer, io::Io};
+use std::path::PathBuf;
 
 pub struct Output {
-	pub path: PathBuf,
-	pub extension: String,
-	format: Format,
-	muxer: Box<dyn Muxer>,
+	path: PathBuf,
+	io: Option<Box<dyn Io>>,
+	called: bool,
+	muxer: Option<Box<dyn Muxer>>,
 }
 
 impl Output {
-	pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
-		let resolver = ContainerResolver::new();
-		Self::from_resolver(path, &resolver)
-	}
-
-	pub fn builder<'a, P: AsRef<Path>>(
-		path: P,
-		resolver: &'a ContainerResolver,
-	) -> Result<OutputBuilder<'a, P>> {
-		let extension = utils::extension_from_path(path.as_ref())?;
-		let container = resolver.resolver_for(&extension)?;
-		let format = Format::from_container(container)?;
-		Ok(OutputBuilder { path, resolver, format })
-	}
-
-	#[inline]
-	pub fn from_resolver<P: AsRef<Path>>(path: P, resolver: &ContainerResolver) -> Result<Self> {
-		Self::builder(path, resolver)?.build()
-	}
-
-	pub const fn format(&self) -> &Format {
-		&self.format
-	}
-
-	#[inline]
-	pub fn with_metadata(&mut self, metadata: impl Into<Metadata>) -> &mut Self {
-		self.muxer.set_metadata(Some(metadata.into()));
-		self
-	}
-
-	#[inline(always)]
-	pub fn write_packet(&mut self, packet: Packet) -> Result<()> {
-		self.muxer.write(packet)
-	}
-
-	#[inline(always)]
-	pub fn flush(&mut self) -> Result<()> {
-		self.muxer.finalize()
-	}
-
-	#[inline(always)]
-	pub fn finalize(&mut self) -> Result<()> {
-		self.muxer.finalize()
-	}
-
-	#[inline]
-	pub fn write_all<I>(&mut self, packets: I) -> Result<()>
-	where
-		I: IntoIterator<Item = Packet>,
-	{
-		for packet in packets {
-			self.write_packet(packet)?;
+	fn ensure_file(&mut self) -> Result<()> {
+		if self.io.is_none() {
+			let io = File::create(&self.path)?;
+			self.io = Some(Box::new(io));
 		}
 		Ok(())
+	}
+
+	fn ensure_muxer(&mut self, _stream: Option<&Stream>) -> Result<()> {
+		if self.muxer.is_some() {
+			return Ok(());
+		}
+		self.ensure_file()?;
+
+		// auto infer based of codec?
+		let extension = self.extension();
+		let hint = Hint { extension, ..Default::default() };
+		// todo: take io
+		let muxer = crate::container::select_muxer(hint, self.io.take().unwrap())?;
+		self.muxer = Some(muxer);
+		Ok(())
+	}
+
+	fn muxer(&mut self, stream: Option<&Stream>) -> Result<&mut dyn Muxer> {
+		self.ensure_muxer(stream)?;
+
+		if let Some(muxer) = self.muxer.as_deref_mut() {
+			return Ok(muxer);
+		}
+
+		Err(Message::Other("muxer not ready"))
+	}
+
+	fn extension(&self) -> Option<String> {
+		self.path.extension().and_then(|e| e.to_str()).map(|s| s.to_string())
+	}
+
+	pub fn create(path: impl AsRef<std::path::Path>) -> Result<Self> {
+		let path = path.as_ref().to_path_buf();
+		Ok(Self { path, io: None, called: false, muxer: None })
+	}
+}
+
+impl Muxer for Output {
+	fn add(&mut self, stream: &Stream) -> Result<usize> {
+		self.muxer(Some(stream))?.add(stream)
+	}
+
+	fn write(&mut self, packet: Packet) -> Result<()> {
+		self.called = true;
+		self.muxer(None)?.write(packet)
+	}
+
+	fn finish(&mut self) -> Result<()> {
+		// todo: make sense?
+		if !self.called {
+			return Ok(());
+		}
+		self.muxer(None)?.finish()
 	}
 }

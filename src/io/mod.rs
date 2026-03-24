@@ -1,18 +1,9 @@
-mod cursor;
-mod file;
+mod http;
 pub mod input;
+mod io;
 pub mod output;
-mod reader;
-mod seek;
-mod stdio;
-mod writer;
-pub use cursor::Cursor;
-pub use file::File;
+pub mod source;
+pub use http::*;
 pub use input::*;
-pub use output::Output;
-#[allow(unused_imports)]
+pub use io::*;
 pub use output::*;
-pub use reader::*;
-pub use seek::*;
-pub use stdio::*;
-pub use writer::{BinaryWrite, MediaWrite, StdWriteAdapter};
