@@ -1,82 +1,75 @@
-use crate::{error, message};
+use std::fmt;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Time {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TimeBase {
 	pub num: u32,
 	pub den: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Time {
+	ticks: u64,
+	base: TimeBase,
+}
+
+impl TimeBase {
+	pub const fn new(num: u32, den: u32) -> Self {
+		Self { num, den }
+	}
+}
+
 impl Time {
-	pub fn new(num: u32, den: u32) -> message::Result<Self> {
-		if num == 0 || den == 0 {
-			return Err(error!("numerator and denominator must be > 0"));
+	pub const fn new(ticks: u64, base: TimeBase) -> Self {
+		Self { ticks, base }
+	}
+
+	pub const fn zero(base: TimeBase) -> Self {
+		Self { ticks: 0, base }
+	}
+
+	pub const fn from_seconds(seconds: f64, base: TimeBase) -> Self {
+		let ticks = (seconds * (base.den as f64) / (base.num as f64)).round() as u64;
+		Self { ticks, base }
+	}
+
+	pub const fn as_seconds(&self) -> f64 {
+		self.ticks as f64 * (self.base.num as f64) / (self.base.den as f64)
+	}
+
+	pub fn checked_add(self, other: Time) -> Option<Self> {
+		if self.base != other.base {
+			return None;
 		}
-		Ok(Self { num, den })
+		self.ticks.checked_add(other.ticks).map(|ticks| Self { ticks, base: self.base })
 	}
 
-	pub fn to_seconds(&self, pts: i64) -> f64 {
-		pts as f64 * (self.num as f64) / (self.den as f64)
-	}
-
-	pub fn from_seconds(&self, seconds: f64) -> i64 {
-		(seconds * self.den as f64 / self.num as f64) as i64
-	}
-
-	pub fn scale_pts(&self, pts: i64, target: Time) -> Option<i64> {
-		let mut pts128 = pts as i128;
-
-		pts128 = pts128.checked_mul(target.num as i128)?;
-		pts128 = pts128.checked_div(target.den as i128)?;
-		pts128 = pts128.checked_mul(self.den as i128)?;
-		pts128 = pts128.checked_div(self.num as i128)?;
-
-		pts128.try_into().ok()
-	}
-
-	pub fn gcd(&self) -> u32 {
-		fn gcd(a: u32, b: u32) -> u32 {
-			if b == 0 { a } else { gcd(b, a % b) }
+	pub fn checked_sub(self, other: Time) -> Option<Self> {
+		if self.base != other.base {
+			return None;
 		}
-		gcd(self.num, self.den)
+		self.ticks.checked_sub(other.ticks).map(|ticks| Self { ticks, base: self.base })
 	}
 
-	pub fn simplify(&self) -> Time {
-		let g = self.gcd();
-		Time { num: self.num / g, den: self.den / g }
-	}
-}
+	pub fn unpack(&self) -> (u64, u64, u64, u64) {
+		let ticks = self.ticks;
+		let base = self.base;
 
-#[derive(Debug, Clone, Default, Copy)]
-pub struct Timestamp {
-	pub time: Time,
-	pub pts: i64,
-}
+		let total_ms = ticks * base.num as u64 * 1000 / base.den as u64;
 
-impl Timestamp {
-	pub fn new(time: Time, pts: i64) -> Self {
-		Self { time, pts }
-	}
+		let total_seconds = total_ms / 1000;
+		let ms = total_ms % 1000;
 
-	pub fn zero(time: Time) -> Self {
-		Self { pts: 0, time }
-	}
+		let hour = total_seconds / 3600;
+		let minutes = (total_seconds % 3600) / 60;
+		let seconds = total_seconds % 60;
 
-	pub fn advance(&mut self, delta: i64) {
-		self.pts += delta;
-	}
-
-	pub fn as_seconds(&self) -> f64 {
-		self.time.to_seconds(self.pts)
-	}
-
-	pub fn scale_to(&self, target: Time) -> Option<Timestamp> {
-		let scaled_pts = self.time.scale_pts(self.pts, target)?;
-		Some(Timestamp { pts: scaled_pts, time: target })
+		(hour, minutes, seconds, ms)
 	}
 }
 
-impl From<Timestamp> for i64 {
-	fn from(timestamp: Timestamp) -> Self {
-		timestamp.pts
+impl fmt::Display for Time {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let (hour, minutes, seconds, _) = self.unpack();
+		write!(f, "{:02}:{:02}:{:02}", hour, minutes, seconds)
 	}
 }
