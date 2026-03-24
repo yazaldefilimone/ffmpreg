@@ -1,6 +1,6 @@
-use osaka::core::traits::*;
-use osaka::io::{Input, Output};
-use osaka::Result;
+use ffmpreg::core::traits::*;
+use ffmpreg::io::{Input, Output};
+use ffmpreg::Result;
 
 const URL: &str = "https://samplefile.com/samples/download/audio/wav/wav_stereo_44k_mix_sample.wav";
 

@@ -1,9 +1,9 @@
-use osaka::Result;
-use osaka::core::Context;
-use osaka::core::Resolver;
-use osaka::core::StreamHashMap;
-use osaka::core::traits::*;
-use osaka::io::{Input, Output};
+use ffmpreg::Result;
+use ffmpreg::core::Context;
+use ffmpreg::core::Resolver;
+use ffmpreg::core::StreamHashMap;
+use ffmpreg::core::traits::*;
+use ffmpreg::io::{Input, Output};
 
 pub fn main() -> Result<()> {
 	let mut demuxer = Input::open("./playground/your_name_sparkle.wav")?;

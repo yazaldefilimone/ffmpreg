@@ -274,6 +274,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
+name = "ffmpreg"
+version = "0.1.2"
+dependencies = [
+ "clap",
+ "nom",
+ "reqwest",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -792,19 +805,6 @@ name = "openssl-probe"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
-
-[[package]]
-name = "osaka"
-version = "0.1.2"
-dependencies = [
- "clap",
- "nom",
- "reqwest",
- "rustc-hash",
- "serde",
- "serde_json",
- "tempfile",
-]
 
 [[package]]
 name = "percent-encoding"
