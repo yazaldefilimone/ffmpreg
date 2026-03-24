@@ -19,6 +19,7 @@ pub trait Io {
 	}
 
 	// fn seek(&mut self, pos: u64) -> Result<()>;
+	#[allow(unused_variables)]
 	fn seek(&mut self, pos: u64) -> Result<()> {
 		Err("seek not supported on this backend".into())
 	}
