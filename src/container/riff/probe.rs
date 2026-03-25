@@ -12,9 +12,9 @@ const WAVE: &[u8] = b"WAVE";
 /// header size = RIFF (4 bytes) + file size (4 bytes) + WAVE (4 bytes)
 const RIFF_HEADER_SIZE: usize = RIFF.len() + FILE_SIZE + WAVE.len();
 
-pub struct WavProbe;
+pub struct RiffProbe;
 
-impl Probe for WavProbe {
+impl Probe for RiffProbe {
 	fn demuxer_matches(data: &[u8]) -> bool {
 		if data.len() < RIFF_HEADER_SIZE {
 			return false;
@@ -37,10 +37,10 @@ impl Probe for WavProbe {
 	}
 
 	fn create_muxer(io: Box<dyn Io>) -> Result<Box<dyn Muxer>> {
-		Ok(Box::new(super::muxer::WavMuxer::new(io)))
+		Ok(Box::new(super::muxer::RiffMuxer::new(io)))
 	}
 
 	fn create_demuxer(io: Box<dyn Io>) -> Result<Box<dyn Demuxer>> {
-		Ok(Box::new(super::demuxer::WavDemuxer::new(io)?))
+		Ok(Box::new(super::demuxer::RiffDemuxer::new(io)?))
 	}
 }

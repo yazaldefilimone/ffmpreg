@@ -3,7 +3,7 @@ use crate::core::{CodecId, Demuxer, Packet, Stream, StreamId, StreamSet, Time};
 use crate::io::Io;
 use crate::message::Result;
 
-pub struct WavDemuxer {
+pub struct RiffDemuxer {
 	io: Box<dyn Io>,
 	streams: StreamSet,
 	data_start: u64,
@@ -13,7 +13,7 @@ pub struct WavDemuxer {
 	block_align: u16,
 }
 
-impl WavDemuxer {
+impl RiffDemuxer {
 	pub fn new(mut io: Box<dyn Io>) -> Result<Self> {
 		let mut riff_header = [0u8; 12];
 		read_exact(&mut *io, &mut riff_header)?;
@@ -133,7 +133,7 @@ impl WavDemuxer {
 	}
 }
 
-impl Demuxer for WavDemuxer {
+impl Demuxer for RiffDemuxer {
 	fn read(&mut self) -> Result<Option<Packet>> {
 		if self.remaining == 0 {
 			return Ok(None);

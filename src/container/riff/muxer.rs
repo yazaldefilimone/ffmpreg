@@ -2,13 +2,13 @@ use crate::core::{Muxer, Packet, Stream};
 use crate::io::Io;
 use crate::message::Result;
 
-pub struct WavMuxer {
+pub struct RiffMuxer {
 	io: Box<dyn Io>,
 	written: u64,
 	streamed: bool,
 }
 
-impl WavMuxer {
+impl RiffMuxer {
 	pub fn new(io: Box<dyn Io>) -> Self {
 		Self { io, written: 0, streamed: false }
 	}
@@ -56,7 +56,7 @@ impl WavMuxer {
 	}
 }
 
-impl Muxer for WavMuxer {
+impl Muxer for RiffMuxer {
 	fn add(&mut self, stream: &Stream) -> Result<usize> {
 		if self.streamed {
 			return Err("wav supports only one stream".into());

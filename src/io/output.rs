@@ -1,4 +1,5 @@
 use crate::Message;
+use crate::container;
 use crate::core::{Hint, Packet, Stream};
 use crate::io::File;
 use crate::message::Result;
@@ -30,8 +31,8 @@ impl Output {
 		// auto infer based of codec?
 		let extension = self.extension();
 		let hint = Hint { extension, ..Default::default() };
-		// todo: take io
-		let muxer = crate::container::select_muxer(hint, self.io.take().unwrap())?;
+		// todo: take io?
+		let muxer = container::select_muxer(hint, self.io.take().unwrap())?;
 		self.muxer = Some(muxer);
 		Ok(())
 	}
