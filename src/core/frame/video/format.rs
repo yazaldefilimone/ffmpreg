@@ -1,12 +1,12 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Format {
+pub enum PixelFormat {
 	YUV420,
 	YUV422,
 	YUV444,
 }
 
 #[derive(Debug, Clone)]
-pub struct PixelFormat {
+pub struct Pixel {
 	pub depth: u8,
-	pub format: Format,
+	pub format: PixelFormat,
 }

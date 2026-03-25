@@ -2,6 +2,7 @@ pub mod context;
 pub mod frame;
 pub mod packet;
 pub mod resolver;
+pub mod sample;
 pub mod stream;
 pub mod time;
 pub mod traits;

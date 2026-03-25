@@ -189,8 +189,8 @@ impl Demuxer for WavDemuxer {
 		if self.block_align == 0 {
 			return Time::zero(tb);
 		}
+		let samples = self.size / self.block_align as u64;
 
-		let samples = (self.size / self.block_align as u64) as u64;
 		Time::new(samples, tb)
 	}
 }

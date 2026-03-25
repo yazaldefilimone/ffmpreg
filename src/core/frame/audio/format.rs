@@ -1,5 +1,5 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ChannelLayout {
+pub enum Channels {
 	Mono,
 	Stereo,
 	Quad,
@@ -8,15 +8,15 @@ pub enum ChannelLayout {
 	Custom(u64),
 }
 
-impl ChannelLayout {
+impl Channels {
 	pub const fn count(self) -> u8 {
 		match self {
-			ChannelLayout::Mono => 1,
-			ChannelLayout::Stereo => 2,
-			ChannelLayout::Quad => 4,
-			ChannelLayout::Surround51 => 6,
-			ChannelLayout::Surround71 => 8,
-			ChannelLayout::Custom(c) => c.count_ones() as u8,
+			Channels::Mono => 1,
+			Channels::Stereo => 2,
+			Channels::Quad => 4,
+			Channels::Surround51 => 6,
+			Channels::Surround71 => 8,
+			Channels::Custom(c) => c.count_ones() as u8,
 		}
 	}
 }
@@ -62,7 +62,7 @@ impl SampleRate {
 #[derive(Debug, Clone)]
 pub struct AudioParams {
 	pub sample_rate: SampleRate,
-	pub channels: ChannelLayout,
+	pub channels: Channels,
 	pub sample_format: SampleFormat,
 	pub codec_extradata: Vec<u8>,
 }

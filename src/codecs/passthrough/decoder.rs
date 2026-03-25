@@ -23,14 +23,14 @@ impl core::Decoder for Decoder {
 		let frame = match self.kind {
 			StreamKind::Audio => {
 				let (sample_rate, channels) = match state {
-					State::Audio(audio) => (SampleRate::Custom(audio.sample_rate), audio.channel),
-					State::Video(_) => (SampleRate::SR48K, ChannelLayout::Stereo),
+					State::Audio(audio) => (SampleRate::Custom(audio.sample_rate), audio.channels),
+					State::Video(_) => (SampleRate::SR48K, Channels::Stereo),
 				};
 				Frame::Audio(AudioFrame {
 					data: packet.data.clone(),
 					sample_rate,
 					channels,
-					bit_depth: SampleFormat::S16,
+					format: SampleFormat::S16,
 					nb_samples: 0,
 					pts: packet.pts,
 				})
@@ -38,7 +38,7 @@ impl core::Decoder for Decoder {
 			_ => {
 				let (width, height, pixel) = match state {
 					State::Video(video) => (video.width, video.height, video.pixel.clone()),
-					State::Audio(_) => (0, 0, PixelFormat { depth: 8, format: PixelFormatKind::YUV420 }),
+					State::Audio(_) => (0, 0, video::Pixel { depth: 8, format: video::PixelFormat::YUV420 }),
 				};
 				Frame::Video(VideoFrame {
 					data: packet.data.clone(),
