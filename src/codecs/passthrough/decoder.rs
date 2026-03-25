@@ -5,6 +5,7 @@ use crate::{core::*, message::Result};
 pub struct Decoder {
 	kind: StreamKind,
 }
+
 impl Decoder {
 	pub fn new(kind: StreamKind) -> Self {
 		Self { kind }

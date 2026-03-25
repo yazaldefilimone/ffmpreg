@@ -1,11 +1,12 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Channels {
 	Mono,
+	#[default]
 	Stereo,
 	Quad,
 	Surround51,
 	Surround71,
-	Custom(u64),
+	Custom(u8),
 }
 
 impl Channels {
@@ -16,7 +17,18 @@ impl Channels {
 			Channels::Quad => 4,
 			Channels::Surround51 => 6,
 			Channels::Surround71 => 8,
-			Channels::Custom(c) => c.count_ones() as u8,
+			Channels::Custom(c) => c,
+		}
+	}
+
+	pub const fn from_value(value: u8) -> Self {
+		match value {
+			1 => Channels::Mono,
+			2 => Channels::Stereo,
+			4 => Channels::Quad,
+			6 => Channels::Surround51,
+			8 => Channels::Surround71,
+			_ => Channels::Custom(value),
 		}
 	}
 }

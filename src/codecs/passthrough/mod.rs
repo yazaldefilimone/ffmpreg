@@ -12,7 +12,7 @@ pub fn audio_state(parameters: &Parameters) -> State {
 			4 => Channels::Quad,
 			6 => Channels::Surround51,
 			8 => Channels::Surround71,
-			other => Channels::Custom(other as u64),
+			other => Channels::Custom(other),
 		},
 		frame_size: 0,
 		base: CodecState { extradata: Vec::new(), pts: None, dts: None, last_pts: None },
