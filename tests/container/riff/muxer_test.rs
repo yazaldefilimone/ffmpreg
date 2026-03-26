@@ -1,5 +1,5 @@
 use ffmpreg::container::riff::muxer::RiffMuxer;
-use ffmpreg::core::{CodecId, Muxer, Packet, Stream, StreamId};
+use ffmpreg::core::{CodecId, Metadata, Muxer, Packet, Stream, StreamId};
 use ffmpreg::io::Io;
 
 #[test]
@@ -47,6 +47,70 @@ fn wav_muxer_uses_float_format_tag_when_codec_is_float() {
 	let data = io.snapshot();
 	assert_eq!(u16::from_le_bytes([data[20], data[21]]), 3);
 	assert_eq!(u16::from_le_bytes([data[34], data[35]]), 32);
+}
+
+#[test]
+fn wav_muxer_stores_metadata_even_when_container_does_not_write_it_yet() {
+	let io = SharedIo::default();
+	let mut muxer = RiffMuxer::new(Box::new(io));
+
+	let metadata =
+		Metadata { title: Some("demo".into()), artist: Some("ffmpreg".into()), ..Default::default() };
+
+	muxer.set_metadata(metadata).unwrap();
+
+	assert_eq!(muxer.metadata().title.as_deref(), Some("demo"));
+	assert_eq!(muxer.metadata().artist.as_deref(), Some("ffmpreg"));
+}
+
+#[test]
+fn wav_muxer_writes_list_info_metadata_when_present() {
+	let io = SharedIo::default();
+	let mut muxer = RiffMuxer::new(Box::new(io.clone()));
+
+	muxer
+		.set_metadata(Metadata {
+			title: Some("demo title".into()),
+			artist: Some("demo artist".into()),
+			comment: Some("demo comment".into()),
+			track_number: Some(7),
+			..Default::default()
+		})
+		.unwrap();
+
+	let stream = Stream::audio(StreamId(0), 44_100, 2, CodecId::new("pcm_s16le"));
+	muxer.add(&stream).unwrap();
+	muxer.write(Packet::new(StreamId(0), vec![1, 2, 3, 4])).unwrap();
+	muxer.finish().unwrap();
+
+	let data = io.snapshot();
+	let text = String::from_utf8_lossy(&data);
+	assert!(text.contains("LIST"));
+	assert!(text.contains("INFO"));
+	assert!(text.contains("INAM"));
+	assert!(text.contains("demo title"));
+	assert!(text.contains("IART"));
+	assert!(text.contains("demo artist"));
+	assert!(text.contains("ICMT"));
+	assert!(text.contains("demo comment"));
+	assert!(text.contains("ITRK"));
+	assert!(text.contains("7"));
+}
+
+#[test]
+fn wav_muxer_keeps_global_metadata_separate_from_stream_metadata() {
+	let io = SharedIo::default();
+	let mut muxer = RiffMuxer::new(Box::new(io));
+
+	muxer.set_metadata(Metadata { title: Some("global".into()), ..Default::default() }).unwrap();
+
+	let mut stream = Stream::audio(StreamId(0), 44_100, 2, CodecId::new("pcm_s16le"));
+	stream.metadata = Metadata { title: Some("stream".into()), ..Default::default() };
+
+	muxer.add(&stream).unwrap();
+
+	assert_eq!(muxer.metadata().title.as_deref(), Some("global"));
+	assert_eq!(stream.metadata.title.as_deref(), Some("stream"));
 }
 
 #[derive(Clone, Default)]

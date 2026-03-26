@@ -1,4 +1,4 @@
-use crate::core::{Packet, StreamSet, Time};
+use crate::core::{Metadata, Packet, StreamSet, Time};
 use crate::{container, message::*};
 use crate::{core::Demuxer, io::*};
 
@@ -34,18 +34,27 @@ impl Input {
 }
 
 impl Demuxer for Input {
+	#[inline(always)]
 	fn read(&mut self) -> Result<Option<Packet>> {
 		self.demuxer.read()
 	}
 
+	#[inline(always)]
 	fn streams(&self) -> &StreamSet {
 		self.demuxer.streams()
 	}
 
+	#[inline(always)]
+	fn metadata(&self) -> &Metadata {
+		self.demuxer.metadata()
+	}
+
+	#[inline(always)]
 	fn seek(&mut self, time: f64) -> Result<()> {
 		self.demuxer.seek(time)
 	}
 
+	#[inline(always)]
 	fn duration(&self) -> Time {
 		self.demuxer.duration()
 	}

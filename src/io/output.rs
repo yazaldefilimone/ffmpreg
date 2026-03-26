@@ -1,6 +1,6 @@
 use crate::Message;
 use crate::container;
-use crate::core::{Hint, Packet, Stream};
+use crate::core::{Hint, Metadata, Packet, Stream};
 use crate::io::File;
 use crate::message::Result;
 use crate::{core::Muxer, io::Io};
@@ -10,6 +10,7 @@ pub struct Output {
 	path: PathBuf,
 	io: Option<Box<dyn Io>>,
 	called: bool,
+	metadata: Metadata,
 	muxer: Option<Box<dyn Muxer>>,
 }
 
@@ -34,6 +35,7 @@ impl Output {
 		// todo: take io?
 		let muxer = container::select_muxer(hint, self.io.take().unwrap())?;
 		self.muxer = Some(muxer);
+		self.muxer.as_deref_mut().unwrap().set_metadata(self.metadata.clone())?;
 		Ok(())
 	}
 
@@ -53,11 +55,23 @@ impl Output {
 
 	pub fn create(path: impl AsRef<std::path::Path>) -> Result<Self> {
 		let path = path.as_ref().to_path_buf();
-		Ok(Self { path, io: None, called: false, muxer: None })
+		Ok(Self { path, io: None, called: false, metadata: Metadata::default(), muxer: None })
 	}
 }
 
 impl Muxer for Output {
+	fn set_metadata(&mut self, metadata: Metadata) -> Result<()> {
+		self.metadata = metadata.clone();
+		if let Some(muxer) = self.muxer.as_deref_mut() {
+			muxer.set_metadata(metadata)?;
+		}
+		Ok(())
+	}
+
+	fn metadata(&self) -> &Metadata {
+		&self.metadata
+	}
+
 	fn add(&mut self, stream: &Stream) -> Result<usize> {
 		self.muxer(Some(stream))?.add(stream)
 	}

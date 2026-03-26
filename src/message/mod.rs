@@ -3,6 +3,7 @@ pub enum Message {
 	Io(std::io::Error),
 	Other(&'static str),
 	Container(&'static str),
+	Codec(&'static str),
 }
 
 pub type Result<T> = std::result::Result<T, Message>;

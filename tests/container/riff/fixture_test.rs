@@ -60,9 +60,21 @@ fn wav_fixtures_roundtrip_payload_without_loss() {
 		let roundtrip_stream = roundtrip.streams().get(0usize.into()).unwrap().clone();
 		let roundtrip_payload = read_all_packets(&mut roundtrip);
 
-		assert_eq!(roundtrip_stream.parameters.codec.id, source_stream.parameters.codec.id, "{}", case.path);
-		assert_eq!(roundtrip_stream.parameters.sample_rate, source_stream.parameters.sample_rate, "{}", case.path);
-		assert_eq!(roundtrip_stream.parameters.channels, source_stream.parameters.channels, "{}", case.path);
+		assert_eq!(
+			roundtrip_stream.parameters.codec.id, source_stream.parameters.codec.id,
+			"{}",
+			case.path
+		);
+		assert_eq!(
+			roundtrip_stream.parameters.sample_rate, source_stream.parameters.sample_rate,
+			"{}",
+			case.path
+		);
+		assert_eq!(
+			roundtrip_stream.parameters.channels, source_stream.parameters.channels,
+			"{}",
+			case.path
+		);
 		assert_eq!(roundtrip_payload, source_payload, "{}", case.path);
 	}
 }
