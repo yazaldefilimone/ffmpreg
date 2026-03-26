@@ -23,7 +23,7 @@ jobs:
         run: cargo fmt --check
 
       - name: lint code (clippy strict)
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --workspace --lib --bins --tests -- -D warnings
 
       - name: run tests
         run: cargo test
