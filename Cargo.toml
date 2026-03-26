@@ -6,13 +6,60 @@ description = "An experimental general-purpose multimedia toolkit."
 authors = ["Yazalde Filimone <yazaldefilimon@gmail.com>"]
 repository = "https://github.com/yazaldefilimone/ffmpreg"
 license = "Apache-2.0"
-exclude = ["readme.md", "dx-*"]
 
 [dependencies]
-clap = { version = "4.5", features = ["derive"] }
-glob = "0.3"
+clap = { version = "4.5.60", features = ["derive"] }
 nom = "8.0.0"
+reqwest = { version = "0.13.2", features = ["blocking", "default-tls"] }
 rustc-hash = "2.1.1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.139"
 
 [dev-dependencies]
 tempfile = "3.10"
+
+[features]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = "symbols" # Set to `false` for debug information
+debug = false # Set to `true` for debug information
+panic = "abort" # Let it crash and force ourselves to write safe Rust
+
+[profile.dev]
+# Disabling debug info speeds up local and CI builds,
+# and we don't rely on it for debugging that much.
+debug = false
+
+[profile.test]
+# Disabling debug info speeds up local and CI builds,
+# and we don't rely on it for debugging that much.
+debug = false
+
+
+
+
+# Profile used for release mode, but with debugging information for profiling
+# and debugging. Use `cargo build --profile=release-with-debug` to build with this profile.
+[profile.release-with-debug]
+inherits = "release"
+strip = false # Keep debug information in binary
+debug = true # Include maximum amount of debug information
+
+# Profile for `cargo coverage`
+[profile.coverage]
+inherits = "release"
+opt-level = 2 # Compile faster
+codegen-units = 256 # Compile faster
+lto = "thin" # Faster compile time with thin LTO
+debug-assertions = true # Make sure `debug_assert!`s pass
+overflow-checks = true # Catch arithmetic overflow errors
+
+# Profile for linting with release mode-like settings.
+# Catches lint errors which only appear in release mode.
+# `cargo lint --profile dev-no-debug-assertions` is about 35% faster than `cargo lint --release`.
+[profile.dev-no-debug-assertions]
+inherits = "dev"
+debug-assertions = false

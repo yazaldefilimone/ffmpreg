@@ -1,0 +1,45 @@
+name: code-quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout source
+        uses: actions/checkout@v4
+
+      - name: setup rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: verify formatting (rustfmt)
+        run: cargo fmt --check
+
+      - name: lint code (clippy strict)
+        run: cargo clippy -- -D warnings
+
+      - name: run tests
+        run: cargo test
+
+  check-ignored:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout source
+        uses: actions/checkout@v4
+
+      - name: setup rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: run ignored integration tests
+        run: cargo test --test io -- --ignored

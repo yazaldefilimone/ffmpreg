@@ -1,9 +1,7 @@
-pub mod cli;
+#![allow(clippy::module_inception, clippy::collapsible_if)]
 pub mod codecs;
 pub mod container;
 pub mod core;
 pub mod io;
-pub mod message;
-pub mod transform;
-pub const EXIT_FAILURE: i32 = 1;
-pub const EXIT_SUCCESS: i32 = 0;
+mod message;
+pub use message::*;
