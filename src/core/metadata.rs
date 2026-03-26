@@ -32,19 +32,14 @@ pub struct AttachedFile {
 	pub filename: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum RawValue {
 	String(String),
 	Bytes(Vec<u8>),
 	Image(AttachedImage),
 	File(AttachedFile),
+	#[default]
 	None,
-}
-
-impl Default for RawValue {
-	fn default() -> Self {
-		Self::None
-	}
 }
 
 // temp
