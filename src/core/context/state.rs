@@ -1,4 +1,4 @@
-use crate::core::{Time, VideoFrame, audio::Channels, video};
+use crate::core::{Channels, SampleFormat, SampleLayout, Time, VideoFrame, video};
 
 #[derive(Debug, Clone)]
 pub struct CodecState {
@@ -9,14 +9,6 @@ pub struct CodecState {
 }
 
 #[derive(Debug, Clone)]
-pub enum Samples {
-	S16(Vec<i16>),
-	S32(Vec<i32>),
-	F32(Vec<f32>),
-	F64(Vec<f64>),
-}
-
-#[derive(Debug, Clone)]
 pub struct VideoState {
 	pub width: u32,
 	pub height: u32,
@@ -24,16 +16,17 @@ pub struct VideoState {
 	pub reorder: Vec<VideoFrame>,
 	pub has_keyframe: bool,
 
-	pub base: CodecState,
+	pub codec_state: CodecState,
 }
 
 #[derive(Debug, Clone)]
 pub struct AudioState {
 	pub sample_rate: u32,
 	pub channels: Channels,
+	pub format: SampleFormat,
+	pub layout: SampleLayout,
 	pub frame_size: usize,
-	pub base: CodecState,
-	pub samples: Samples,
+	pub codec_state: CodecState,
 
 	pub samples_consumed: u64,
 	pub samples_produced: u64,

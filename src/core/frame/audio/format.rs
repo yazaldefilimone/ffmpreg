@@ -21,6 +21,10 @@ impl Channels {
 		}
 	}
 
+	pub const fn from_count(value: u8) -> Self {
+		Self::from_value(value)
+	}
+
 	pub const fn from_value(value: u8) -> Self {
 		match value {
 			1 => Channels::Mono,
@@ -52,29 +56,24 @@ impl SampleFormat {
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SampleRate {
-	SR44_1K,
-	SR48K,
-	SR96K,
-	Custom(u32),
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SampleLayout {
+	#[default]
+	Interleaved,
+	Planar,
 }
 
-impl SampleRate {
-	pub const fn value(self) -> u32 {
-		match self {
-			SampleRate::SR44_1K => 44_100,
-			SampleRate::SR48K => 48_000,
-			SampleRate::SR96K => 96_000,
-			SampleRate::Custom(rate) => rate,
-		}
+impl SampleLayout {
+	pub const fn is_planar(self) -> bool {
+		matches!(self, SampleLayout::Planar)
 	}
 }
 
 #[derive(Debug, Clone)]
 pub struct AudioParams {
-	pub sample_rate: SampleRate,
+	pub sample_rate: u32,
 	pub channels: Channels,
 	pub sample_format: SampleFormat,
+	pub sample_layout: SampleLayout,
 	pub codec_extradata: Vec<u8>,
 }

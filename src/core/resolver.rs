@@ -1,4 +1,4 @@
-use crate::codecs::passthrough;
+use crate::codecs::raw;
 use crate::core::{CodecId, Decoder, Demuxer, Encoder, Muxer, Stream};
 
 #[derive(Debug, Clone, Default)]
@@ -27,11 +27,11 @@ impl Resolver {
 	}
 
 	pub fn decoder_for(&self, stream: &Stream) -> Option<Box<dyn Decoder>> {
-		Some(Box::new(passthrough::decoder::Decoder::new(stream.kind)))
+		Some(Box::new(raw::decoder::Decoder::new(stream.kind)))
 	}
 
 	pub fn encoder_for(&self, stream: &Stream) -> Option<Box<dyn Encoder>> {
-		Some(Box::new(passthrough::encoder::Encoder::new(stream.id, stream.kind)))
+		Some(Box::new(raw::encoder::Encoder::new(stream.id, stream.kind)))
 	}
 
 	pub fn demuxer_for(&self, _hint: &Hint) -> Option<Box<dyn Demuxer>> {

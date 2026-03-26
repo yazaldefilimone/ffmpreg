@@ -23,18 +23,15 @@ impl core::Decoder for Decoder {
 	fn decode(&self, state: &mut State, packet: Packet) -> Result<DecodeOut<State>> {
 		let frame = match self.kind {
 			StreamKind::Audio => {
-				let (sample_rate, channels) = match state {
-					State::Audio(audio) => (SampleRate::Custom(audio.sample_rate), audio.channels),
-					State::Video(_) => (SampleRate::SR48K, Channels::Stereo),
+				let (sample_rate, channels, format, layout) = match state {
+					State::Audio(audio) => (audio.sample_rate, audio.channels, audio.format, audio.layout),
+					State::Video(_) => {
+						(48_000, Channels::Stereo, SampleFormat::S16, SampleLayout::Interleaved)
+					}
 				};
-				Frame::Audio(AudioFrame {
-					data: packet.data.clone(),
-					sample_rate,
-					channels,
-					format: SampleFormat::S16,
-					nb_samples: 0,
-					pts: packet.pts,
-				})
+				let mut frame = AudioFrame::new(packet.data.clone(), sample_rate, channels, format, layout);
+				frame.pts = packet.pts;
+				Frame::Audio(frame)
 			}
 			_ => {
 				let (width, height, pixel) = match state {
