@@ -1,10 +1,11 @@
 use crate::Message;
-use crate::core::{CodecId, Demuxer, Packet, Stream, StreamId, StreamSet, Time};
+use crate::core::{CodecId, Demuxer, Metadata, Packet, Stream, StreamId, StreamSet, Time};
 use crate::io::Io;
 use crate::message::Result;
 
 pub struct RiffDemuxer {
 	io: Box<dyn Io>,
+	metadata: Metadata,
 	streams: StreamSet,
 	data_start: u64,
 	size: u64,
@@ -22,6 +23,7 @@ impl RiffDemuxer {
 		}
 
 		let mut offset = 12u64;
+		let mut metadata = Metadata::default();
 		let mut channels = None;
 		let mut sample_rate = None;
 		let mut byte_rate = None;
@@ -87,6 +89,20 @@ impl RiffDemuxer {
 				continue;
 			}
 
+			if chunk_id == b"LIST" {
+				let mut list = vec![0u8; chunk_size as usize];
+				read_exact(&mut *io, &mut list)?;
+				offset += chunk_size;
+
+				parse_list_chunk(&list, &mut metadata);
+
+				if padded_size > chunk_size {
+					skip_exact(&mut *io, padded_size - chunk_size)?;
+					offset += padded_size - chunk_size;
+				}
+				continue;
+			}
+
 			if chunk_id == b"data" {
 				data_start = Some(offset);
 				size = Some(chunk_size);
@@ -129,7 +145,57 @@ impl RiffDemuxer {
 		let mut streams = StreamSet::default();
 		streams.add(stream);
 
-		Ok(Self { io, streams, data_start, size, remaining: size, byte_rate, block_align })
+		Ok(Self { io, metadata, streams, data_start, size, remaining: size, byte_rate, block_align })
+	}
+}
+
+fn parse_list_chunk(list: &[u8], metadata: &mut Metadata) {
+	if list.len() < 4 || &list[..4] != b"INFO" {
+		return;
+	}
+
+	let mut offset = 4usize;
+	while offset + 8 <= list.len() {
+		let id = &list[offset..offset + 4];
+		let size = u32::from_le_bytes(list[offset + 4..offset + 8].try_into().unwrap()) as usize;
+		offset += 8;
+
+		if offset + size > list.len() {
+			break;
+		}
+
+		let value = decode_info_string(&list[offset..offset + size]);
+		apply_info_tag(metadata, id, value);
+
+		offset += size + (size & 1);
+	}
+}
+
+fn decode_info_string(bytes: &[u8]) -> String {
+	let end = bytes.iter().position(|b| *b == 0).unwrap_or(bytes.len());
+	String::from_utf8_lossy(&bytes[..end]).trim().to_string()
+}
+
+fn apply_info_tag(metadata: &mut Metadata, id: &[u8], value: String) {
+	if value.is_empty() {
+		return;
+	}
+
+	match id {
+		b"INAM" => metadata.title = Some(value),
+		b"IART" => metadata.artist = Some(value),
+		b"IPRD" => metadata.album = Some(value),
+		b"ICMT" => metadata.comment = Some(value),
+		b"IGNR" => metadata.genre = Some(value),
+		b"ICRD" => metadata.date = Some(value),
+		b"ITRK" => {
+			metadata.track_number = value.parse().ok();
+			metadata.raw.insert("ITRK".into(), crate::core::RawValue::String(value));
+		}
+		_ => {
+			let key = String::from_utf8_lossy(id).to_string();
+			metadata.raw.insert(key, crate::core::RawValue::String(value));
+		}
 	}
 }
 
@@ -162,6 +228,10 @@ impl Demuxer for RiffDemuxer {
 
 	fn streams(&self) -> &StreamSet {
 		&self.streams
+	}
+
+	fn metadata(&self) -> &Metadata {
+		&self.metadata
 	}
 
 	fn seek(&mut self, time: f64) -> Result<()> {

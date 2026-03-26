@@ -1,5 +1,5 @@
 use crate::{
-	core::{Frame, Hint, Packet, Parameters, State, Stream, StreamSet, Time},
+	core::{Frame, Hint, Metadata, Packet, Parameters, State, Stream, StreamSet, Time},
 	io::Io,
 	message::Result,
 };
@@ -35,10 +35,13 @@ pub trait Demuxer {
 	fn read(&mut self) -> Result<Option<Packet>>;
 	fn seek(&mut self, time: f64) -> Result<()>;
 	fn duration(&self) -> Time;
+	fn metadata(&self) -> &Metadata;
 	fn streams(&self) -> &StreamSet;
 }
 
 pub trait Muxer {
+	fn set_metadata(&mut self, metadata: Metadata) -> Result<()>;
+	fn metadata(&self) -> &Metadata;
 	fn add(&mut self, stream: &Stream) -> Result<usize>;
 
 	fn add_all(&mut self, setter: &StreamSet) -> Result<usize> {

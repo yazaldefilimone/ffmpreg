@@ -1,7 +1,7 @@
 use rustc_hash::FxHashMap;
 
 use crate::core::{
-	Context,
+	Context, Metadata,
 	time::{Time, TimeBase},
 };
 
@@ -60,6 +60,7 @@ pub struct Stream {
 	pub time_base: TimeBase,
 	pub duration: Option<Time>,
 	pub parameters: Parameters,
+	pub metadata: Metadata,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -106,6 +107,7 @@ impl Stream {
 				height: Some(height),
 				pixel_format: Some(pixel_format.to_string()),
 			},
+			metadata: Metadata::default(),
 		}
 	}
 
@@ -125,6 +127,7 @@ impl Stream {
 				height: None,
 				pixel_format: None,
 			},
+			metadata: Metadata::default(),
 		}
 	}
 }
