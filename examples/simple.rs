@@ -19,7 +19,6 @@ pub fn main() -> Result<()> {
 		let decode_state = decoder.create_state(&stream.parameters);
 		let encode_state = encoder.create_state(&stream.parameters);
 		let state = ContextState::new(decode_state, encode_state);
-
 		let context = Context { stream_id: stream.id, decoder, encoder, state };
 		streams.insert(stream.id, context);
 		muxer.add(&stream)?;
@@ -27,18 +26,13 @@ pub fn main() -> Result<()> {
 
 	while let Some(packet) = demuxer.read()? {
 		let ctx = streams.get_mut(&packet.stream_id).unwrap();
-
-		let output = ctx.decoder.decode(&mut ctx.state.decode, packet)?;
-		for frame in output.value {
-			let output = ctx.encoder.encode(&mut ctx.state.encode, frame)?;
-			for packet in output.value {
-				muxer.write(packet)?;
-			}
+		for packet in ctx.run(packet)? {
+			muxer.write(packet)?;
 		}
 	}
 
 	for ctx in streams.values_mut() {
-		let output = ctx.encoder.flush(&mut ctx.state.encode)?;
+		let output = ctx.flush()?;
 		for packet in output.value {
 			muxer.write(packet)?;
 		}
