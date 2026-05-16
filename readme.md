@@ -262,3 +262,6 @@ usage, reducing panics, and keeping external dependencies to a minimum. The
 goal is to provide a high-performance media processing engine that is easy to
 understand, integrate, and extend while maintaining strong Rust safety
 guarantees.
+
+[![Star History Chart](https://api.star-history.com/chart?repos=yazaldefilimone/ffmpreg&type=date&legend=top-left)](https://www.star-history.com/?repos=yazaldefilimone%2Fffmpreg&type=date&legend=top-left)
+
