@@ -7,3 +7,4 @@ pub use http::*;
 pub use input::*;
 pub use io::*;
 pub use output::*;
+pub mod bits;

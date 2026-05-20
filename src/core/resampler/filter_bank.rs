@@ -3,5 +3,3 @@ pub struct FilterBank {
 	phase_length: usize,
 	m: usize,
 }
-
-// usar upsample_factor / downsample_factor
